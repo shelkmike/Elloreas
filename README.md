@@ -1,2 +1,2 @@
 # Elloreas
-Elloreas, a genome assembler
+Will be here in a few days
