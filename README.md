@@ -53,7 +53,7 @@ The main files produced by Elloreas are:
 <br />
 
 ### Caveats:
-1) Long reads usually contain a large percent of sequencing errors, namely short indels and substitutions of one nitrogen base by another. Some of these errors may persist in your assembly. Therefore, after you assemble the sequence, I highly recommend to polish it with programs such as [Pilon](https://github.com/broadinstitute/pilon/wiki) or [Racon](https://github.com/isovic/racon). 
+1) Long reads usually contain a large percent of sequencing errors, namely short indels and substitutions of one nitrogenous base by another. Some of these errors may persist in your assembly. Therefore, after you assemble the sequence, I highly recommend to polish it with programs such as [Pilon](https://github.com/broadinstitute/pilon/wiki) or [Racon](https://github.com/isovic/racon). 
 Don't forget to include all sequences from your genome during polishing. Otherwise, there may be mistakes. For example, if you polish a plant's mitochondrial genome but don't add the plastid genome during polishing, some of plastid reads will map to the mitochondrial genome (because these two genomes have homologous sequences), which may make mistakes. During the assembly stage, the plastid genome won't be a big problem, because those homologous sequences create forks, which are reported by Elloreas, so you can choose the mitochondrial extension and ignore the plastid one.
   
 <br />
