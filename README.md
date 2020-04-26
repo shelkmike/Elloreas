@@ -16,7 +16,7 @@ For a full list of parameters with suggestions on how to use them run
   
 ### How Elloreas works.
 A more detailed description may be found in manual.pdf, but in short it works like this:	
-<img src="https://gcf.fbb.msu.ru/shelkmike/Elloreas_logo/scheme.jpeg" width="80%" height="80%"/>
+<img src="https://gcf.fbb.msu.ru/shelkmike/Elloreas_logo/scheme.jpeg?" width="80%" height="80%"/>
 <br />
 
 At each iteration Elloreas produces a list of alternative extensions.
