@@ -662,7 +662,7 @@ Paenibacillus_sp_RUD330__starting_from_dnaA	Paenibacillus_sp_RUD330__starting_fr
 			#$array_string_split[9]=~/plus/ is checked because inverted repeats do not cause loops.
 			#also checking that the repeat is perfect (100% sequence similarity)
 			@array_string_split=split(/\t/,$array_file_with_blast_results[$line_number]);
-			if((($array_string_split[5]==length($contig_sequence))||($array_string_split[7]==length($contig_sequence)))&&($array_string_split[9]=~/plus/)&&($array_string_split[8]>=$min_aligned_length)&&($array_string_split[5]==100))
+			if((($array_string_split[5]==length($contig_sequence))||($array_string_split[7]==length($contig_sequence)))&&($array_string_split[9]=~/plus/)&&($array_string_split[8]>=$min_aligned_length)&&($array_string_split[3]==100))
 			{
 				print LOGFILE "\n\nEnding, because Elloreas has entered an eternal loop. This means one of the following two things:\n";
 				print LOGFILE "1) You have assembled a circular genome.\n";
