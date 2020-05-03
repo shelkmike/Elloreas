@@ -1,2 +1,5 @@
-Elloreas 1.14
+Elloreas 1.15.
+Improved the algorithm for reads with many sequencing errors.
+
+Elloreas 1.14.
 This is the first version of Elloreas deposited on GitHub.

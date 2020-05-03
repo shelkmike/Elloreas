@@ -54,7 +54,7 @@ The main files produced by Elloreas are:
 
 ### Caveats:
 1) Long reads usually contain a large percent of sequencing errors, namely short indels and substitutions of one nitrogenous base by another. Some of these errors may persist in your assembly. Therefore, after you assemble the sequence, I highly recommend to polish it with programs such as [Pilon](https://github.com/broadinstitute/pilon/wiki) or [Racon](https://github.com/isovic/racon). 
-Don't forget to include all sequences from your genome during polishing. Otherwise, there may be mistakes. For example, if you polish a plant's mitochondrial genome but don't add the plastid genome during polishing, some of plastid reads will map to the mitochondrial genome (because these two genomes have homologous sequences), which may make mistakes. During the assembly stage, the plastid genome won't be a big problem, because those homologous sequences create forks, which are reported by Elloreas, so you can choose the mitochondrial extension and ignore the plastid one.
+Don't forget to include all sequences from your genome during polishing. Otherwise, there may be mistakes. For example, if you polish a plant's mitochondrial genome but don't add the plastid genome during polishing, some of plastid reads will map to the mitochondrial genome (because these two genomes have homologous sequences), which may produce a chimeric sequence. During the assembly stage, the plastid genome won't be a big problem, because those homologous sequences create forks, which are reported by Elloreas, so you can choose the mitochondrial extension and ignore the plastid one.
   
 <br />
 
@@ -75,26 +75,30 @@ One of the most important features of Elloreas is that it provides a user with a
 
 Yes, it can. Minimap2, the read mapper which Elloreas uses, is capable of mapping short reads too. However, Elloreas will use paired-end reads as single-end reads. This is why I recommend to use dedicated targeted assemblers for short reads, like NOVOPlasty or TASR.
 
-5) There was a fork at some iteration. Elloreas chose one of alternative extensions, but I want to try another one. What should I do?<br />
+5) Long reads of PacBio and Oxford Nanopore usually contain many sequencing errors. Why not integrate a polishing process like in [Racon](https://github.com/lbcb-sci/racon) into Elloreas, so it polishes the contig after the assembly finishes?<br />
+
+The problem with contig polishing by read mapping is that if you take only a single contig for polishing, reads from paralogs will map onto it too, so the polished sequence will become a chimera. This is why it is important to add all contigs of your genome to the contig created by Elloreas and perform polishing only after this, thus reducing the possibility of false mappings.
+
+6) There was a fork at some iteration. Elloreas chose one of alternative extensions, but I want to try another one. What should I do?<br />
 
 In the file history_of_alternative_extensions.txt find the respective iteration. You will see a list of alternative extensions for this iteration. Elloreas always chooses the extension supported by the highest number of reads. Take the file contig_from_the_final_iteration.fasta, remove everything starting with this most-supported extension and instead paste the extension you want to try. Then, use this newly formed contig as a starter.
 
-6) Where can I ask questions about Elloreas?<br />
+7) Where can I ask questions about Elloreas?<br />
 
 You can use the "Issues" section on GitHub (https://github.com/shelkmike/Elloreas/issues)
 
-7) How fast is Elloreas?<br />
+8) How fast is Elloreas?<br />
 
 I tested it using 22 CPU cores for several datasets each containing about a million reads and the rate of contig elongation was on the order of 1 kilobase per minute.
 
-8) Will Elloreas run on Windows or Mac?<br />
+9) Will Elloreas run on Windows or Mac?<br />
 
 I didn't test it on Mac, but I think it will work if you can install all the required programs. To run Elloreas on Windows use a virtual Linux machine, for example Ubuntu run through VirtualBox (https://www.osboxes.org/ubuntu/).
 
-9) Many de novo assemblers create assembly graphs. Why can't they be used to detect forks in the assembly instead of Elloreas?<br />
+10) Many de novo assemblers create assembly graphs. Why can't they be used to detect forks in the assembly instead of Elloreas?<br />
 
 You can use them. For example, Spades produces FASTG files with assembly graphs which can be visualised with Bandage. However, in my experience, de novo assemblers often don't report all forks. Probably, this is because there are some inner requirements of how represented by reads a branch should be to report this branch in a FASTG file. Elloreas, instead, produces a more detailed list of alternative extensions arising during the assembly process.
 
-10) Well, finally, will Elloreas be useful for me?<br />
+11) Well, finally, will Elloreas be useful for me?<br />
 
 I don't know. It definitely was useful for ME. You may give it a try.

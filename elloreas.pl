@@ -3,7 +3,7 @@
 =head
 Elloreas, a genome assembler. https://github.com/shelkmike/Elloreas
 =cut
-$Elloreas_version="1.14";
+$Elloreas_version="1.15";
 
 
 #determining the path to the folder where Elloreas is located. It is needed to run auxiliary scripts like plot_coverage_for_Elloreas.r
@@ -75,7 +75,6 @@ foreach $iteration_number(1..$max_number_of_cycles)
 	{
 		system("rm -rf ./$output_folder/Iteration*");
 	}
-	system("");
 	system("mkdir $output_folder/Iteration$iteration_number");
 	#taking the right edge of the contig to map reads
 	#if the contig is shorter than $contig_edge_size_to_use_for_alignment then we take the whole contig. If it is longer, take only the right $contig_edge_size_to_use_for_alignment bases
@@ -107,7 +106,7 @@ foreach $iteration_number(1..$max_number_of_cycles)
 	$average_length_of_extensions=0; #average length of parts of reads overhanging the edge
 	
 	#mapping reads
-	system("minimap2 -x $sequencing_technology -a --secondary no --sam-hit-only -o $output_folder/Iteration$iteration_number/mapping.it$iteration_number.sam -t $cores_to_use $output_folder/Iteration$iteration_number/Edge_iteration$iteration_number.fasta $reads_file_path");
+	system("minimap2 -x $sequencing_technology -a --secondary no --end-bonus 100 --sam-hit-only -o $output_folder/Iteration$iteration_number/mapping.it$iteration_number.sam -t $cores_to_use $output_folder/Iteration$iteration_number/Edge_iteration$iteration_number.fasta $reads_file_path");
 	
 	#if required, make a coverage plot. To do this, I first need to convert sam to bam
 	if($should_elloreas_draw_coverage_plots=~/true/)
@@ -242,7 +241,6 @@ foreach $iteration_number(1..$max_number_of_cycles)
 	#теперь открываю файл с картированием и нахожу там все риды, картировавшиеся на край. Strolling through the same sam-file twice doesn't take much time, because I have directed minimap2 to print only mapped reads.
 	
 	open SAMFILE, "< $output_folder/Iteration$iteration_number/mapping.it$iteration_number.sam";
-	open LIST_OF_EXTENSIONS, "> $output_folder/Iteration$iteration_number/list_of_extensions.it$iteration_number.txt"; #список удлинений, просто для теста. Выглядит так: часть рида, которая лежит на контиге _ часть рида, которая выступает за контиг
 	$number_of_overhanging_reads_that_map_well_enough=0; #the number of reads that map to the edge with enough sequence similarity and long enough mapping part.
 	while(<SAMFILE>)
 	{
@@ -359,7 +357,6 @@ foreach $iteration_number(1..$max_number_of_cycles)
 		}
 
 	}
-	close(LIST_OF_EXTENSIONS);
 	close(SAMFILE);
 	
 	if($number_of_overhanging_reads_that_map_well_enough==0)
@@ -513,12 +510,18 @@ foreach $iteration_number(1..$max_number_of_cycles)
 					{
 						$string=$_;
 						$string=~s/[Nn]//g;
+						$string=uc($string);
 						chomp($string);
 						$array_of_consensus_sequences_without_Ns[$cluster_number_created_by_USEARCH].=$string;
 					}
 				}
 				close(CONSENSUS_FILE);
 			}
+			
+			#removing the right 10% bases of the consensus, because the rightmost bases of the consensus often contain mistakes (see the comment "1)" to the version 1.15 in the file "my_comments_to_versions.txt").
+			$length_of_the_consensus_before_chopping_the_right_10_percents=length($array_of_consensus_sequences_without_Ns[$cluster_number_created_by_USEARCH]);
+			$array_of_consensus_sequences_without_Ns[$cluster_number_created_by_USEARCH]=substr($array_of_consensus_sequences_without_Ns[$cluster_number_created_by_USEARCH],0,int(0.9*$length_of_the_consensus_before_chopping_the_right_10_percents)+1); #"+1" because in an unusual case when the consensus was only 1 bp long, if I don't use "+1" I will elongate the contig by 0 bp, thus Elloreas will forever loop, continuing iteration with the same contig sequence, adding 0 bp each time.
+			
 			
 			print HISTORY_OF_ALTERNATIVE_EXTENSIONS "Extension ".($number_of_cluster_in_the_top).") Supported by ".$hash_cluster_number_created_by_USEARCH_to_the_number_of_reads_forming_it{$cluster_number_created_by_USEARCH}." reads: $array_of_consensus_sequences_without_Ns[$cluster_number_created_by_USEARCH]\n";
 			print LOGFILE "Extension ".($number_of_cluster_in_the_top).") Supported by ".$hash_cluster_number_created_by_USEARCH_to_the_number_of_reads_forming_it{$cluster_number_created_by_USEARCH}." reads\n";
