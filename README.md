@@ -83,22 +83,26 @@ The problem with contig polishing by read mapping is that if you take only a sin
 
 In the file history_of_alternative_extensions.txt find the respective iteration. You will see a list of alternative extensions for this iteration. Elloreas always chooses the extension supported by the highest number of reads. Take the file contig_from_the_final_iteration.fasta, remove everything starting with this most-supported extension and instead paste the extension you want to try. Then, use this newly formed contig as a starter.
 
-7) Where can I ask questions about Elloreas?<br />
+7) I'm using a read as a starter but Elloreas stops after the first iteration. Why is this so?<br />
+
+The problem is that reads may be too dissimilar to each other. If sequencing errors make each of two reads 85% similar to the genome, then, if the sequencing errors were random, these two reads will be approximately 72% similar to each other (0.85\*0.85=0.7225). This is why reads hardly map to a starter which is also a read. To deal with this, I recommend to decrease the value of the "--minimum_read_similarity" parameter.
+
+8) Where can I ask questions about Elloreas?<br />
 
 You can use the "Issues" section on GitHub (https://github.com/shelkmike/Elloreas/issues)
 
-8) How fast is Elloreas?<br />
+9) How fast is Elloreas?<br />
 
 I tested it using 22 CPU cores for several datasets each containing about a million reads and the rate of contig elongation was on the order of 1 kilobase per minute.
 
-9) Will Elloreas run on Windows or Mac?<br />
+10) Will Elloreas run on Windows or Mac?<br />
 
 I didn't test it on Mac, but I think it will work if you can install all the required programs. To run Elloreas on Windows use a virtual Linux machine, for example Ubuntu run through VirtualBox (https://www.osboxes.org/ubuntu/).
 
-10) Many de novo assemblers create assembly graphs. Why can't they be used to detect forks in the assembly instead of Elloreas?<br />
+11) Many de novo assemblers create assembly graphs. Why can't they be used to detect forks in the assembly instead of Elloreas?<br />
 
 You can use them. For example, Spades produces FASTG files with assembly graphs which can be visualised with Bandage. However, in my experience, de novo assemblers often don't report all forks. Probably, this is because there are some inner requirements of how represented by reads a branch should be to report this branch in a FASTG file. Elloreas, instead, produces a more detailed list of alternative extensions arising during the assembly process.
 
-11) Well, finally, will Elloreas be useful for me?<br />
+12) Well, finally, will Elloreas be useful for me?<br />
 
 I don't know. It definitely was useful for ME. You may give it a try.
