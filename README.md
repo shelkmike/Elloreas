@@ -2,7 +2,7 @@
 
 Elloreas is a targeted genome assembler, which means it takes a starter and then iteratively extends it with sequencing reads. This starter may be a contig from another assembly or just a random read. The principle of operation of Elloreas is similar to the principles of many other similar tools, like [TASR](https://github.com/bcgsc/TASR), [Mapsemsler2](http://colibread.inria.fr/software/mapsembler2/), [NOVOPlasty](https://github.com/ndierckx/NOVOPlasty) or [DistributedNucleatingAssembler](https://github.com/JGI-Bioinformatics/Kmernator). However, while those assemblers are designed for short reads, Elloreas was created for long reads, produced by sequencing machines of PacBio and Oxford Nanopore.
 
-I created Elloreas to assemble the mitochondrial genome of Fagopyrum esculentum. A feature of this genome is that it consists of 10 circular chromosomes. Moreover, they can recombine, merging with each other or splitting into several smaller chromosomes. Multiple alternative forms of chromosomes coexist within a single plant, this is called "structural heteroplasmy". You can read more about this in an upcoming paper "Mitochondrial genome of Fagopyrum esculentum and the genetic diversity of extranuclear genomes in buckwheat" where Elloreas is described. I thought that Elloreas may be useful for other bioinformaticians, this is why I deposited it on GitHub.
+I created Elloreas to assemble the mitochondrial genome of Fagopyrum esculentum. A feature of this genome is that it consists of 10 circular chromosomes. Moreover, they can recombine, merging with each other or splitting into several smaller chromosomes. Multiple alternative forms of chromosomes coexist within a single plant, this is called "structural heteroplasmy". You can read more about this in the paper ["Mitochondrial genome of Fagopyrum esculentum and the genetic diversity of extranuclear genomes in buckwheat"](https://pubmed.ncbi.nlm.nih.gov/32408719/) where Elloreas is described. I thought that Elloreas may be useful for other bioinformaticians, this is why I deposited it on GitHub.
   
 ### How to run Elloreas.
 A simple version, which will often be enough:  
@@ -49,6 +49,8 @@ The main files produced by Elloreas are:
 2) history_of_alternative_extensions.txt - this file contains the list of alternative extensions present in each iteration of elongation. Only the top 5 most represented by reads extensions are listed there.
 3) contig_from_the_final_iteration.fasta - this is the final contig produced by Elloreas.
 4) coverage_plot_for_the_contig_from_the_final_iteration.jpeg and dotplot_for_the_contig_from_the_final_iteration.jpeg - these two figures represent a read coverage distribution and a dotplot for the final contig produced by Elloreas.
+
+You can read about other files produced by Elloreas in the full version of the manual (manual.pdf).
   
 <br />
 
@@ -61,11 +63,11 @@ Don't forget to include all sequences from your genome during polishing. Otherwi
 ### Frequently asked questions:
 1) How to cite Elloreas?<br />
 
-Cite the paper "Mitochondrial genome of Fagopyrum esculentum and the genetic diversity of extranuclear genomes in buckwheat" (currently under review) where Elloreas was first described.
+Cite the paper ["Mitochondrial genome of Fagopyrum esculentum and the genetic diversity of extranuclear genomes in buckwheat"](https://pubmed.ncbi.nlm.nih.gov/32408719/) where Elloreas was first described.
 
 2) What's the difference between this readme and the full version of the manual?<br />
 
-The full version of the manual (manual.pdf) provided with each version of Elloreas is identical to the document you now read, except that the manual additionally contains a detailed description of the algorithm.
+The full version of the manual (manual.pdf) provided with each version of Elloreas is identical to the document you now read, except that the manual contains a more detailed description of the output files and the algorithm of Elloreas.
 
 3) Elloreas extends the contig only in the 3' direction ("to the right"). Why not make it to extend the contig to the left too?<br />
 

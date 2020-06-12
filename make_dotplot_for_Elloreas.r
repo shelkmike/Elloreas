@@ -2,6 +2,7 @@
 args <- commandArgs(TRUE)
 infile_name <-args[1]
 outfile_name <-args[2]
+text_for_the_title <-args[3]
 
 jpeg(outfile_name,width=1000,height=1000, quality = 90)
 
@@ -17,6 +18,6 @@ maximum_value_of_x<-my.max(x)
 maximum_value_of_y<-my.max(y)
 
 par(mar = c(5, 5, 5, 5)) # Setting the margin on all sides
-plot(x,y,xlim=c(0,maximum_value_of_x),ylim=c(0,maximum_value_of_y),type="l",main="Dot plot for the final contig produced by Elloreas",xlab="position (bp)",ylab="position (bp)", xaxs = "i", yaxs = "i", cex.main=2, cex.lab=1.5)
+plot(x,y,xlim=c(0,maximum_value_of_x),ylim=c(0,maximum_value_of_y),type="l",main=text_for_the_title,xlab="position (bp)",ylab="position (bp)", xaxs = "i", yaxs = "i", cex.main=2, cex.lab=1.5)
 
 

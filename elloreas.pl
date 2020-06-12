@@ -3,7 +3,7 @@
 =head
 Elloreas, a genome assembler. https://github.com/shelkmike/Elloreas
 =cut
-$Elloreas_version="1.15";
+$Elloreas_version="1.16";
 
 
 #determining the path to the folder where Elloreas is located. It is needed to run auxiliary scripts like plot_coverage_for_Elloreas.r
@@ -22,7 +22,24 @@ open LOGFILE, "> $output_folder/elloreas_logs.txt";
 &print_parameters_provided_by_the_user_via_the_command_line; #this subroutine prints a list of parameters provided by the user via the command line.
 &check_that_the_input_FASTA_file_contains_only_one_sequence; #checking that the input file contains only one sequence.
 
-
+#If the user has asked only to build a dot plot and a coverage plot ("--only_make_a_dot_plot_and_a_coverage_plot true") then Elloreas does this and stops working.
+if($should_elloreas_only_make_a_dot_plot_and_a_coverage_plot=~/true/)
+{
+	system("mkdir $output_folder/Temporary");
+	system("minimap2 -x $sequencing_technology -a --secondary no --sam-hit-only -o $output_folder/Temporary/mapping.sam -t $number_of_CPU_threads_to_use $starter_file_path $reads_file_path");
+	system("samtools view -Sbh $output_folder/Temporary/mapping.sam >$output_folder/Temporary/mapping.bam");
+	system("samtools sort $output_folder/Temporary/mapping.bam >$output_folder/Temporary/mapping.sorted.bam");
+	system("samtools index $output_folder/Temporary/mapping.sorted.bam");
+	system("bedtools genomecov -d -ibam $output_folder/Temporary/mapping.sorted.bam > $output_folder/Temporary/coverage_list.txt");
+	system("Rscript $path_to_the_folder_where_Elloreas_is_located/plot_coverage_for_Elloreas.r $output_folder/Temporary/coverage_list.txt $output_folder/coverage_plot_for_the_starter.jpeg \"Coverage plot for the starter\"");
+	#making the dotplot
+	system("lastz $starter_file_path $starter_file_path --notransition --strand=both --step=20 --nogapped --format=rdotplot > $output_folder/Temporary/data_to_build_the_dotplot.txt");
+	system("Rscript $path_to_the_folder_where_Elloreas_is_located/make_dotplot_for_Elloreas.r $output_folder/Temporary/data_to_build_the_dotplot.txt $output_folder/dotplot_for_the_starter.jpeg \"Dot plot for the starter\"");
+	#removing the temporary folder
+	system("rm -rf $output_folder/Temporary");
+	print LOGFILE "Elloreas has finished building a dot plot and a coverage plot for the starter.";
+	exit();
+}
 
 open HISTORY_OF_ALTERNATIVE_EXTENSIONS, "> $output_folder/history_of_alternative_extensions.txt"; #the file where I write top-5 alternative extensions at each iteration (or less, if there are less than five).
 
@@ -49,10 +66,11 @@ $contig_sequence=uc($contig_sequence);
 close(CONTIG_FILE);
 
 #chopping $number_of_bases_to_trim_from_the_starter_edges_in_the_very_beginning_of_the_assembly bases from each end. If the sequence is so short that after this chopping it becomes shorter than , then die.
-if(length($contig_sequence)>=(2*$number_of_bases_to_trim_from_the_starter_edges_in_the_very_beginning_of_the_assembly+$min_aligned_length))
+if(length($contig_sequence)>=(2*$number_of_bases_to_trim_from_the_starter_edges_in_the_very_beginning_of_the_assembly+$minimum_length_of_mapped_read_part))
 {
 	$contig_sequence=substr($contig_sequence,$number_of_bases_to_trim_from_the_starter_edges_in_the_very_beginning_of_the_assembly,length($contig_sequence)-2*$number_of_bases_to_trim_from_the_starter_edges_in_the_very_beginning_of_the_assembly);
-	print LOGILE "The contig length was ".($contig_sequence+2*$number_of_bases_to_trim_from_the_starter_edges_in_the_very_beginning_of_the_assembly).". After chopping $number_of_bases_to_trim_from_the_starter_edges_in_the_very_beginning_of_the_assembly bases from each edge according to the value of the --number_of_bases_to_trim_from_the_starter_edges parameter it became ".length($contig_sequence)." bases long.";
+	#Removed this statement, because it makes logs too complex.
+	#print LOGFILE "The starter length was ".(length($contig_sequence)+2*$number_of_bases_to_trim_from_the_starter_edges_in_the_very_beginning_of_the_assembly).". After chopping $number_of_bases_to_trim_from_the_starter_edges_in_the_very_beginning_of_the_assembly bases, which is the value of \"--number_of_bases_to_trim_from_the_starter_edges\", from each edge it became ".length($contig_sequence)." bases long.\n";
 }
 else
 {
@@ -67,7 +85,7 @@ else
 }
 
 #now, starting the iterations
-foreach $iteration_number(1..$max_number_of_cycles)
+foreach $iteration_number(1..$maximum_number_of_iterations)
 {
 	$current_edge_sequence="";
 	#if the user asked for this, remove data from all previous iterations
@@ -77,10 +95,10 @@ foreach $iteration_number(1..$max_number_of_cycles)
 	}
 	system("mkdir $output_folder/Iteration$iteration_number");
 	#taking the right edge of the contig to map reads
-	#if the contig is shorter than $contig_edge_size_to_use_for_alignment then we take the whole contig. If it is longer, take only the right $contig_edge_size_to_use_for_alignment bases
-	if(length($contig_sequence)>=$contig_edge_size_to_use_for_alignment)
+	#if the contig is shorter than $contig_edge_size_to_use_for_mapping then we take the whole contig. If it is longer, take only the right $contig_edge_size_to_use_for_mapping bases
+	if(length($contig_sequence)>=$contig_edge_size_to_use_for_mapping)
 	{
-		$current_edge_sequence=substr($contig_sequence,length($contig_sequence)-$contig_edge_size_to_use_for_alignment, $contig_edge_size_to_use_for_alignment);
+		$current_edge_sequence=substr($contig_sequence,length($contig_sequence)-$contig_edge_size_to_use_for_mapping, $contig_edge_size_to_use_for_mapping);
 		#creating the file with the edge's sequence
 		open CURRENT_EDGE_OUTFILE, "> $output_folder/Iteration$iteration_number/Edge_iteration$iteration_number.fasta";
 		print CURRENT_EDGE_OUTFILE ">Edge_iteration$iteration_number\n$current_edge_sequence\n";
@@ -106,7 +124,7 @@ foreach $iteration_number(1..$max_number_of_cycles)
 	$average_length_of_extensions=0; #average length of parts of reads overhanging the edge
 	
 	#mapping reads
-	system("minimap2 -x $sequencing_technology -a --secondary no --end-bonus 100 --sam-hit-only -o $output_folder/Iteration$iteration_number/mapping.it$iteration_number.sam -t $cores_to_use $output_folder/Iteration$iteration_number/Edge_iteration$iteration_number.fasta $reads_file_path");
+	system("minimap2 -x $sequencing_technology -a --secondary no --end-bonus 100 --sam-hit-only -o $output_folder/Iteration$iteration_number/mapping.it$iteration_number.sam -t $number_of_CPU_threads_to_use $output_folder/Iteration$iteration_number/Edge_iteration$iteration_number.fasta $reads_file_path");
 	
 	#if required, make a coverage plot. To do this, I first need to convert sam to bam
 	if($should_elloreas_draw_coverage_plots=~/true/)
@@ -115,10 +133,10 @@ foreach $iteration_number(1..$max_number_of_cycles)
 		system("samtools sort $output_folder/Iteration$iteration_number/mapping.it$iteration_number.bam >$output_folder/Iteration$iteration_number/mapping.it$iteration_number.sorted.bam");
 		system("samtools index $output_folder/Iteration$iteration_number/mapping.it$iteration_number.sorted.bam");
 		system("bedtools genomecov -d -ibam $output_folder/Iteration$iteration_number/mapping.it$iteration_number.sorted.bam > $output_folder/Iteration$iteration_number/coverage_list.it$iteration_number.txt");
-		system("Rscript $path_to_the_folder_where_Elloreas_is_located/plot_coverage_for_Elloreas.r $output_folder/Iteration$iteration_number/coverage_list.it$iteration_number.txt $output_folder/Iteration$iteration_number/coverage_plot.it$iteration_number.jpeg");
+		system("Rscript $path_to_the_folder_where_Elloreas_is_located/plot_coverage_for_Elloreas.r $output_folder/Iteration$iteration_number/coverage_list.it$iteration_number.txt $output_folder/Iteration$iteration_number/edge_coverage_plot.it$iteration_number.jpeg \"Coverage plot for the contig\'s 3\' edge used for iteration $iteration_number\"");
 	}
 	
-	#first, I go through the sam-file to determine the median length of read's overhangs. (but counting it only using reads for which at least $min_aligned_length bases were mapped)
+	#first, I go through the sam-file to determine the median length of read's overhangs. (but counting it only using reads for which at least $minimum_length_of_mapped_read_part bases were mapped)
 	@array_of_overhang_lengths=();
 	$median_overhang_length=0;
 	open SAMFILE, "< $output_folder/Iteration$iteration_number/mapping.it$iteration_number.sam";               
@@ -212,7 +230,7 @@ foreach $iteration_number(1..$max_number_of_cycles)
 				#print LOGFILE "this read has its part, which is close to the contig edge, mapped\n";
 			}
 			
-			if((($start_position_of_the_mapped_part_of_the_read+$read_length+$number_of_deleted_bases_in_the_read_minus_the_number_of_inserted_bases_in_the_read)>$sequence_we_mapped_to_length)&&($number_of_M_letters_in_CIGAR>=$min_aligned_length)&&($sequence_similarity_between_the_mapped_part_of_the_read_and_the_contig>=$min_sequence_similarity)&&($does_the_read_has_an_unmapped_part_before_the_edge_of_the_contig!~/yes/)&&($number_of_S_letters_at_the_right_side_of_CIGAR>0))
+			if((($start_position_of_the_mapped_part_of_the_read+$read_length+$number_of_deleted_bases_in_the_read_minus_the_number_of_inserted_bases_in_the_read)>$sequence_we_mapped_to_length)&&($number_of_M_letters_in_CIGAR>=$minimum_length_of_mapped_read_part)&&($sequence_similarity_between_the_mapped_part_of_the_read_and_the_contig>=$minimum_read_similarity)&&($does_the_read_has_an_unmapped_part_before_the_edge_of_the_contig!~/yes/)&&($number_of_S_letters_at_the_right_side_of_CIGAR>0))
 			{
 				$overhang_length_of_this_read=$number_of_S_letters_at_the_right_side_of_CIGAR;
 				push(@array_of_overhang_lengths,$overhang_length_of_this_read);
@@ -231,7 +249,7 @@ foreach $iteration_number(1..$max_number_of_cycles)
 	print LOGFILE "The length of the contig to be extended is ".length($contig_sequence)." bases\n";
 	if($median_overhang_length!~/^$/) #if there is at least one overhang
 	{
-		print LOGFILE "The median overhang length is $median_overhang_length bases. There are ".($rank_of_the_middle_element+1)." reads with overhangs this long or longer.\n"; #($rank_of_the_middle_element+1) because the rank was counted from zero, not from 1.
+		print LOGFILE "The median overhang length is $median_overhang_length bases. There are ".($number_of_elements-$rank_of_the_middle_element)." reads with overhangs this long or longer.\n"; #($rank_of_the_middle_element+1) because the rank was counted from zero, not from 1.
 	}
 	else
 	{
@@ -337,17 +355,16 @@ foreach $iteration_number(1..$max_number_of_cycles)
 			}
 			
 			#printing to LOGS, if the part close to the edge is not mapped (this should be commented in the future)
-			if((($start_position_of_the_mapped_part_of_the_read+$read_length+$number_of_deleted_bases_in_the_read_minus_the_number_of_inserted_bases_in_the_read)>$sequence_we_mapped_to_length)&&($number_of_M_letters_in_CIGAR>=$min_aligned_length)&&($sequence_similarity_between_the_mapped_part_of_the_read_and_the_contig>=$min_sequence_similarity)&&($does_the_read_has_an_unmapped_part_before_the_edge_of_the_contig!~/yes/))
+			if((($start_position_of_the_mapped_part_of_the_read+$read_length+$number_of_deleted_bases_in_the_read_minus_the_number_of_inserted_bases_in_the_read)>$sequence_we_mapped_to_length)&&($number_of_M_letters_in_CIGAR>=$minimum_length_of_mapped_read_part)&&($sequence_similarity_between_the_mapped_part_of_the_read_and_the_contig>=$minimum_read_similarity)&&($does_the_read_has_an_unmapped_part_before_the_edge_of_the_contig!~/yes/))
 			{
 				#print LOGFILE "this read has its part, which is close to the contig edge, mapped. The CIGAR string is $CIGAR_string . \n";
 			}
-			elsif((($start_position_of_the_mapped_part_of_the_read+$read_length-$number_of_deleted_bases_in_the_read_minus_the_number_of_inserted_bases_in_the_read)>$sequence_we_mapped_to_length)&&($number_of_M_letters_in_CIGAR>=$min_aligned_length)&&($sequence_similarity_between_the_mapped_part_of_the_read_and_the_contig>=$min_sequence_similarity)&&($does_the_read_has_an_unmapped_part_before_the_edge_of_the_contig=~/yes/))
+			elsif((($start_position_of_the_mapped_part_of_the_read+$read_length+$number_of_deleted_bases_in_the_read_minus_the_number_of_inserted_bases_in_the_read)>$sequence_we_mapped_to_length)&&($number_of_M_letters_in_CIGAR>=$minimum_length_of_mapped_read_part)&&($sequence_similarity_between_the_mapped_part_of_the_read_and_the_contig>=$minimum_read_similarity)&&($does_the_read_has_an_unmapped_part_before_the_edge_of_the_contig=~/yes/))
 			{
 				#print LOGFILE "this read has its part, which is close to the contig edge, unmapped. ($read_length-$number_of_S_letters_at_the_right_side_of_CIGAR+$number_of_deleted_bases_in_the_read_minus_the_number_of_inserted_bases_in_the_read)!=(".length($current_edge_sequence)."-$start_position_of_the_mapped_part_of_the_read+1) . The CIGAR string is $CIGAR_string . \n"; 
 			}
 			
-			
-			if((($start_position_of_the_mapped_part_of_the_read+$read_length-$number_of_deleted_bases_in_the_read_minus_the_number_of_inserted_bases_in_the_read)>$sequence_we_mapped_to_length)&&($number_of_M_letters_in_CIGAR>=$min_aligned_length)&&($sequence_similarity_between_the_mapped_part_of_the_read_and_the_contig>=$min_sequence_similarity)&&($does_the_read_has_an_unmapped_part_before_the_edge_of_the_contig!~/yes/)&&($number_of_S_letters_at_the_right_side_of_CIGAR>0))
+			if((($start_position_of_the_mapped_part_of_the_read+$read_length+$number_of_deleted_bases_in_the_read_minus_the_number_of_inserted_bases_in_the_read)>$sequence_we_mapped_to_length)&&($number_of_M_letters_in_CIGAR>=$minimum_length_of_mapped_read_part)&&($sequence_similarity_between_the_mapped_part_of_the_read_and_the_contig>=$minimum_read_similarity)&&($does_the_read_has_an_unmapped_part_before_the_edge_of_the_contig!~/yes/)&&($number_of_S_letters_at_the_right_side_of_CIGAR>0))
 			{
 
 				$number_of_overhanging_reads_that_map_well_enough++;
@@ -361,7 +378,8 @@ foreach $iteration_number(1..$max_number_of_cycles)
 	
 	if($number_of_overhanging_reads_that_map_well_enough==0)
 	{
-			print LOGFILE "\nEnding, because there are no extensions\n";
+			print LOGFILE "\n\nEnding, because there are no extensions\n";
+			print LOGFILE "The length of the final contig is ".length($contig_sequence)." bp.";
 			print HISTORY_OF_ALTERNATIVE_EXTENSIONS "\nElloreas has finished. See elloreas_logs.txt\n";
 			open CONTIG_FROM_THE_FINAL_ITERATION, "> $output_folder/contig_from_the_final_iteration.fasta";
 			print CONTIG_FROM_THE_FINAL_ITERATION ">$contig_title\n";
@@ -405,12 +423,13 @@ foreach $iteration_number(1..$max_number_of_cycles)
 =cut	
 	##########################################################################################################
 	##########################################################################################################
-	#Now I cluster k-mers (if the user provided $min_sequence_similarity<1) or take the most frequent k-mer (if the user provided $min_sequence_similarity=1)
+	#Now I cluster k-mers (if the user provided $minimum_read_similarity<1) or take the most frequent k-mer (if the user provided $minimum_read_similarity=1)
 	
-	if($min_sequence_similarity<1)
+	if($minimum_read_similarity<1)
 	{
 		#Now I create a FASTA-file with all overhangs which are at least $median_overhang_length long. I truncate them to the $median_overhang_length (thus producing k-mers). This file will be used for clustering with UCLUST.
-		open FASTA_FILE_WITH_KMERS, "> $output_folder/Iteration$iteration_number/kmers_to_find_extensions.it$iteration_number.fasta";
+		#Initially these files were called kmers_to_find_extensions.it$iteration_number.fasta . However, I think the word "kmer" may confuse the user, so I renamed it to "overhang". However, they are in fact overhangs TRIMMED to the median overhang length, not full overhangs.
+		open FASTA_FILE_WITH_KMERS, "> $output_folder/Iteration$iteration_number/overhangs.it$iteration_number.fasta";
 		$this_overhang_number=0;
 		foreach $this_read_extension_sequence(@array_extensions)
 		{
@@ -418,19 +437,19 @@ foreach $iteration_number(1..$max_number_of_cycles)
 			{
 				$this_overhang_number++;
 				$kmer=substr($this_read_extension_sequence,0,$median_overhang_length);
-				print FASTA_FILE_WITH_KMERS ">kmer_$this_overhang_number\n$kmer\n";
+				print FASTA_FILE_WITH_KMERS ">overhang_$this_overhang_number\n$kmer\n";
 			}
 		}
 		
 		close(FASTA_FILE_WITH_KMERS);
 		
 		#cluster reads
-		$similarity_for_clustering=$min_sequence_similarity*$min_sequence_similarity; #if we expect X% of similarity between a read and a reference then the expectation of similarity between two reads is approximately X*X. I'm not 100% sure, but I suppose it to be so
-		system("usearch -cluster_fast $output_folder/Iteration$iteration_number/kmers_to_find_extensions.it$iteration_number.fasta -id $similarity_for_clustering -strand plus -threads $cores_to_use -sizeout -clusters $output_folder/Iteration$iteration_number/cluster");
+		$similarity_for_clustering=$minimum_read_similarity*$minimum_read_similarity; #if we expect X% of similarity between a read and a reference then the expectation of similarity between two reads is approximately X*X. I'm not 100% sure, but I suppose it to be so
+		system("usearch -cluster_fast $output_folder/Iteration$iteration_number/overhangs.it$iteration_number.fasta -id $similarity_for_clustering -strand plus -threads $number_of_CPU_threads_to_use -sizeout -clusters $output_folder/Iteration$iteration_number/cluster");
 		
 		@array_of_consensus_sequences_without_Ns=(); #the array of consensus sequences where I have removed Ns (ambiguous bases. They usually arise in columns where some read has a sequencing error which resulted in an insertion. Also, they can arise in columns with so many deletional or point errors that EMBOSS cons cannot calculate the consensus). $array_of_consensus_sequences_without_Ns[0..4]="SEQUENCE" . Numbers of clusters from which these consensuses come are counted from 0 here, not from 1.
 		
-		#performing alignment and alignment consensus calculation for top-5 clusters (or less clusters, if there are less than 5). USEARCH outputs clusters in files with titles like cluster0, cluster1...
+		#performing alignment and alignment consensus calculation for top-5 clusters (or less clusters, if there are less than 5). USEARCH outputs clusters in files with titles like cluster0, cluster1... . For clarity, I rename these files, adding ".fasta" to their ends.
 		
 		print HISTORY_OF_ALTERNATIVE_EXTENSIONS "Alternative extensions most supported by reads:\n";
 		print LOGFILE "Alternative extensions most supported by reads:\n";
@@ -445,7 +464,9 @@ foreach $iteration_number(1..$max_number_of_cycles)
 			if($filename=~/cluster(\d+)$/)
 			{
 				$cluster_number_created_by_USEARCH=$1;
-				open FILE_WITH_KMERS_FORMING_THE_CLUSTER, "< $output_folder/Iteration$iteration_number/cluster$cluster_number_created_by_USEARCH";
+				#renaming the file, adding ".fasta" to the end of its title.
+				system("mv $output_folder/Iteration$iteration_number/cluster$cluster_number_created_by_USEARCH $output_folder/Iteration$iteration_number/cluster$cluster_number_created_by_USEARCH.fasta ");
+				open FILE_WITH_KMERS_FORMING_THE_CLUSTER, "< $output_folder/Iteration$iteration_number/cluster$cluster_number_created_by_USEARCH.fasta";
 				$how_many_reads_support_this_extension=0;
 				while(<FILE_WITH_KMERS_FORMING_THE_CLUSTER>)
 				{
@@ -484,7 +505,7 @@ foreach $iteration_number(1..$max_number_of_cycles)
 			#if this cluster is supported by only one read, then I don't need to perform a multiple alignment and to calculate a consensus. I just take the sequence of the respective k-mer as an alternative extension.
 			if($hash_cluster_number_created_by_USEARCH_to_the_number_of_reads_forming_it{$cluster_number_created_by_USEARCH}==1)
 			{
-				open CLUSTER_FILE, "< $output_folder/Iteration$iteration_number/cluster$cluster_number_created_by_USEARCH";
+				open CLUSTER_FILE, "< $output_folder/Iteration$iteration_number/cluster$cluster_number_created_by_USEARCH.fasta";
 				while(<CLUSTER_FILE>)
 				{
 					if($_!~/^>/)
@@ -500,7 +521,7 @@ foreach $iteration_number(1..$max_number_of_cycles)
 			{
 				$cluster_number_created_by_USEARCH=$array_of_cluster_numbers_created_by_USEARCH_sorted_by_decreasing_numbers_of_reads_forming_them[$number_of_cluster_in_the_top-1]; #counted from 0, not from 1
 				
-				system("mafft --localpair --maxiterate 1000 --thread $cores_to_use --nuc --quiet $output_folder/Iteration$iteration_number/cluster$cluster_number_created_by_USEARCH > $output_folder/Iteration$iteration_number/cluster$cluster_number_created_by_USEARCH"."_alignment.fasta");
+				system("mafft --localpair --maxiterate 1000 --thread $number_of_CPU_threads_to_use --nuc --quiet $output_folder/Iteration$iteration_number/cluster$cluster_number_created_by_USEARCH.fasta > $output_folder/Iteration$iteration_number/cluster$cluster_number_created_by_USEARCH"."_alignment.fasta");
 				system("cons -sequence $output_folder/Iteration$iteration_number/cluster$cluster_number_created_by_USEARCH"."_alignment.fasta -datafile EDNAFULL -outseq $output_folder/Iteration$iteration_number/cluster$cluster_number_created_by_USEARCH"."_consensus.fasta");
 				#loading sequence and removing Ns.
 				open CONSENSUS_FILE, "< $output_folder/Iteration$iteration_number/cluster$cluster_number_created_by_USEARCH"."_consensus.fasta";
@@ -523,7 +544,7 @@ foreach $iteration_number(1..$max_number_of_cycles)
 			$array_of_consensus_sequences_without_Ns[$cluster_number_created_by_USEARCH]=substr($array_of_consensus_sequences_without_Ns[$cluster_number_created_by_USEARCH],0,int(0.9*$length_of_the_consensus_before_chopping_the_right_10_percents)+1); #"+1" because in an unusual case when the consensus was only 1 bp long, if I don't use "+1" I will elongate the contig by 0 bp, thus Elloreas will forever loop, continuing iteration with the same contig sequence, adding 0 bp each time.
 			
 			
-			print HISTORY_OF_ALTERNATIVE_EXTENSIONS "Extension ".($number_of_cluster_in_the_top).") Supported by ".$hash_cluster_number_created_by_USEARCH_to_the_number_of_reads_forming_it{$cluster_number_created_by_USEARCH}." reads: $array_of_consensus_sequences_without_Ns[$cluster_number_created_by_USEARCH]\n";
+			print HISTORY_OF_ALTERNATIVE_EXTENSIONS "Extension ".($number_of_cluster_in_the_top).") Supported by ".$hash_cluster_number_created_by_USEARCH_to_the_number_of_reads_forming_it{$cluster_number_created_by_USEARCH}." reads:\t$array_of_consensus_sequences_without_Ns[$cluster_number_created_by_USEARCH]\n";
 			print LOGFILE "Extension ".($number_of_cluster_in_the_top).") Supported by ".$hash_cluster_number_created_by_USEARCH_to_the_number_of_reads_forming_it{$cluster_number_created_by_USEARCH}." reads\n";
 		}
 
@@ -533,9 +554,10 @@ foreach $iteration_number(1..$max_number_of_cycles)
 		##########################################################################################################
 		##########################################################################################################
 		
-		if($number_of_overhanging_reads_that_map_well_enough<$min_allowed_total_number_of_extending_kmers)
+		if($number_of_overhanging_reads_that_map_well_enough<$minimum_total_number_of_extending_reads)
 		{
-			print LOGFILE "\n\nEnding, because there are less than $min_allowed_total_number_of_extending_kmers extensions\n";
+			print LOGFILE "\n\nEnding, because there are less than $minimum_total_number_of_extending_reads extensions\n";
+			print LOGFILE "The length of the final contig is ".length($contig_sequence)." bp.";
 			print HISTORY_OF_ALTERNATIVE_EXTENSIONS "\n\nElloreas has finished. See elloreas_logs.txt\n";
 			open CONTIG_FROM_THE_FINAL_ITERATION, "> $output_folder/contig_from_the_final_iteration.fasta";
 			print CONTIG_FROM_THE_FINAL_ITERATION ">$contig_title\n";
@@ -548,7 +570,8 @@ foreach $iteration_number(1..$max_number_of_cycles)
 		#if the number of reads forming the top cluster is less than $min_allowed_ratio_of_extensions*$number_of_overhanging_reads_that_map_well_enough, I'm stopping the script.
 		if($size_of_the_largest_cluster<$min_allowed_ratio_of_extensions*$number_of_overhanging_reads_that_map_well_enough)
 		{
-			print LOGFILE "Ending, because of the insufficient ratio (".$size_of_the_largest_cluster."/".$number_of_overhanging_reads_that_map_well_enough.") of most frequent extension\n";
+			print LOGFILE "\n\nEnding, because of the insufficient ratio (".$size_of_the_largest_cluster."/".$number_of_overhanging_reads_that_map_well_enough.") of most frequent extension\n";
+			print LOGFILE "The length of the final contig is ".length($contig_sequence)." bp.";
 			print HISTORY_OF_ALTERNATIVE_EXTENSIONS "Elloreas has finished. See elloreas_logs.txt\n";
 			open CONTIG_FROM_THE_FINAL_ITERATION, "> $output_folder/contig_from_the_final_iteration.fasta";
 			print CONTIG_FROM_THE_FINAL_ITERATION ">$contig_title\n";
@@ -561,6 +584,7 @@ foreach $iteration_number(1..$max_number_of_cycles)
 		if($size_of_the_largest_cluster<$min_allowed_number_of_reads_supporting_the_most_popular_extension)
 		{
 			print LOGFILE "\n\nEnding, because of the insufficient number of reads ($size_of_the_largest_cluster) forming the largest cluster\n";
+			print LOGFILE "The length of the final contig is ".length($contig_sequence)." bp.";
 			print HISTORY_OF_ALTERNATIVE_EXTENSIONS "\n\nElloreas has finished. See elloreas_logs.txt\n";
 			open CONTIG_FROM_THE_FINAL_ITERATION, "> $output_folder/contig_from_the_final_iteration.fasta";
 			print CONTIG_FROM_THE_FINAL_ITERATION ">$contig_title\n";
@@ -592,6 +616,7 @@ foreach $iteration_number(1..$max_number_of_cycles)
 		if($hash_number_of_such_extensions{$top_kmer_sequence}<$min_allowed_ratio_of_extensions*$number_of_overhanging_reads_that_map_well_enough)
 		{
 			print LOGFILE "\n\nEnding, because of the insufficient ratio (".$hash_number_of_such_extensions{$top_kmer_sequence}."/".$number_of_overhanging_reads_that_map_well_enough.") of most frequent extensions\n";
+			print LOGFILE "The length of the final contig is ".length($contig_sequence)." bp.";
 			print HISTORY_OF_ALTERNATIVE_EXTENSIONS "\n\nElloreas has finished. See elloreas_logs.txt\n";
 			open CONTIG_FROM_THE_FINAL_ITERATION, "> $output_folder/contig_from_the_final_iteration.fasta";
 			print CONTIG_FROM_THE_FINAL_ITERATION ">$contig_title\n";
@@ -604,6 +629,7 @@ foreach $iteration_number(1..$max_number_of_cycles)
 		if($hash_number_of_such_extensions{$top_kmer_sequence}<$min_allowed_number_of_reads_supporting_the_most_popular_extension)
 		{
 			print LOGFILE "\n\nEnding, because of the insufficient number of reads (".$hash_number_of_such_extensions{$top_kmer_sequence}.") forming the largest cluster\n";
+			print LOGFILE "The length of the final contig is ".length($contig_sequence)." bp.";
 			print HISTORY_OF_ALTERNATIVE_EXTENSIONS "\n\nElloreas has finished. See elloreas_logs.txt\n";
 			open CONTIG_FROM_THE_FINAL_ITERATION, "> $output_folder/contig_from_the_final_iteration.fasta";
 			print CONTIG_FROM_THE_FINAL_ITERATION ">$contig_title\n";
@@ -613,9 +639,10 @@ foreach $iteration_number(1..$max_number_of_cycles)
 			exit();
 		}
 		
-		if($number_of_overhanging_reads_that_map_well_enough<$min_allowed_total_number_of_extending_kmers)
+		if($number_of_overhanging_reads_that_map_well_enough<$minimum_total_number_of_extending_reads)
 		{
-			print LOGFILE "\n\nEnding, because there are less than $min_allowed_total_number_of_extending_kmers extensions\n";
+			print LOGFILE "\n\nEnding, because there are less than $minimum_total_number_of_extending_reads extensions\n";
+			print LOGFILE "The length of the final contig is ".length($contig_sequence)." bp.";
 			print HISTORY_OF_ALTERNATIVE_EXTENSIONS "\n\nElloreas has finished. See elloreas_logs.txt\n";
 			open CONTIG_FROM_THE_FINAL_ITERATION, "> $output_folder/contig_from_the_final_iteration.fasta";
 			print CONTIG_FROM_THE_FINAL_ITERATION ">$contig_title\n";
@@ -648,7 +675,7 @@ foreach $iteration_number(1..$max_number_of_cycles)
 	$current_contig_filename=$new_contig_filename;
 	
 	#now check with BLAST whether Elloreas has a terminal sequence which causes eternal looping.
-	system("blastn -task megablast -query $output_folder/Iteration$iteration_number/$current_contig_filename -subject $output_folder/Iteration$iteration_number/$current_contig_filename -out $output_folder/Iteration$iteration_number/megablast_results.it$iteration_number.txt -outfmt \"6 qseqid sseqid evalue pident qstart qend sstart send length sstrand\" -num_threads $cores_to_use -max_target_seqs 1 -max_hsps 1000000 -evalue 1e-10");
+	system("blastn -task megablast -query $output_folder/Iteration$iteration_number/$current_contig_filename -subject $output_folder/Iteration$iteration_number/$current_contig_filename -out $output_folder/Iteration$iteration_number/megablast_results.it$iteration_number.txt -outfmt \"6 qseqid sseqid evalue pident qstart qend sstart send length sstrand\" -num_threads $number_of_CPU_threads_to_use -max_target_seqs 1 -max_hsps 1000000 -evalue 1e-10");
 	open BLAST_RESULTS, "< $output_folder/Iteration$iteration_number/megablast_results.it$iteration_number.txt";
 	@array_file_with_blast_results=<BLAST_RESULTS>;
 =head
@@ -665,14 +692,16 @@ Paenibacillus_sp_RUD330__starting_from_dnaA	Paenibacillus_sp_RUD330__starting_fr
 			#$array_string_split[9]=~/plus/ is checked because inverted repeats do not cause loops.
 			#also checking that the repeat is perfect (100% sequence similarity)
 			@array_string_split=split(/\t/,$array_file_with_blast_results[$line_number]);
-			if((($array_string_split[5]==length($contig_sequence))||($array_string_split[7]==length($contig_sequence)))&&($array_string_split[9]=~/plus/)&&($array_string_split[8]>=$min_aligned_length)&&($array_string_split[3]==100))
+			if((($array_string_split[5]==length($contig_sequence))||($array_string_split[7]==length($contig_sequence)))&&($array_string_split[9]=~/plus/)&&($array_string_split[8]>=$minimum_length_of_mapped_read_part)&&($array_string_split[3]==100))
 			{
 				print LOGFILE "\n\nEnding, because Elloreas has entered an eternal loop. This means one of the following two things:\n";
 				print LOGFILE "1) You have assembled a circular genome.\n";
 				print LOGFILE "2) There is a large repeat with one repeat unit somewhere within the contig and the other repeat unit at the right (3') edge of the contig.\n";
 				print LOGFILE "To differentiate between these two cases you can look at the dot plot created by Elloreas (dot_plot_for_the_contig_from_the_final_iteration.jpeg). If you see one repeat unit at the left (5') edge of the contig and the other at the right edge (3'), this means that the contig has circularized (\"1)\"). Basically, during the elongation process Elloreas has started creating on its right edge the same sequence as is on its left edge. If this is a circular genome, you can now remove one of these repeat instances.\n";
-				print LOGFILE "If you see that the left repeat unit is not at the left edge of the contig, this means you have encountered a long repeat present in your genome (\"2)\"). Letting Elloreas work further will make him fall into an eternal loop, forever looping between these two repeat units. You may want to look in the file history_of_alternative_extensions.txt to find a highly supported alternative extension on one of recent iterations of Elloreas, and then choose this alternative extension. See the part of the Frequently Asked Questions called \"There was a fork at some iteration. Elloreas chose one of alternative extensions, but I want to try another one. What should I do?\"\n";
-				print HISTORY_OF_ALTERNATIVE_EXTENSIONS "Elloreas has finished. See elloreas_logs.txt\n";
+				print LOGFILE "If you see that the left repeat unit is not at the left edge of the contig, this means you have encountered a long repeat present in your genome (\"2)\"). Letting Elloreas work further will make him fall into an eternal loop, forever looping between these two repeat units. You may want to look in the file history_of_alternative_extensions.txt to find a highly supported alternative extension in one of recent iterations of Elloreas, and then choose this alternative extension. See the part of the Frequently Asked Questions called \"There was a fork at some iteration. Elloreas chose one of alternative extensions, but I want to try another one. What should I do?\"\n";
+				#Suppressed the output of the final contig length because it distracts the user from a more important text above
+				#print LOGFILE "\nThe length of the final contig is ".length($contig_sequence)." bp.";
+				print HISTORY_OF_ALTERNATIVE_EXTENSIONS "\nElloreas has finished. See elloreas_logs.txt\n";
 				open CONTIG_FROM_THE_FINAL_ITERATION, "> $output_folder/contig_from_the_final_iteration.fasta";
 				print CONTIG_FROM_THE_FINAL_ITERATION ">$contig_title\n";
 				print CONTIG_FROM_THE_FINAL_ITERATION "$contig_sequence\n";
@@ -682,7 +711,7 @@ Paenibacillus_sp_RUD330__starting_from_dnaA	Paenibacillus_sp_RUD330__starting_fr
 			}
 			else
 			{
-				#print LOGFILE "Not stopping Elloreas, BLAST line is $array_file_with_blast_results[$line_number] , values are ".$array_string_split[5]." ".length($contig_sequence)." ".$array_string_split[7]." ".length($contig_sequence)." ".$array_string_split[9]." ".$array_string_split[8]." ".$min_aligned_length."\n";
+				#print LOGFILE "Not stopping Elloreas, BLAST line is $array_file_with_blast_results[$line_number] , values are ".$array_string_split[5]." ".length($contig_sequence)." ".$array_string_split[7]." ".length($contig_sequence)." ".$array_string_split[9]." ".$array_string_split[8]." ".$minimum_length_of_mapped_read_part."\n";
 			}
 			$line_number++;
 		}
@@ -694,25 +723,39 @@ Paenibacillus_sp_RUD330__starting_from_dnaA	Paenibacillus_sp_RUD330__starting_fr
 	}
 	close(BLAST_RESULTS);
 	
+	#before going to the next iteration, I make a dot plot. It may be useful for a user, though this is not required for Elloreas's work.
+	$new_contig_filename=$starter_file_path;
+	$new_contig_filename=~s/^(.+)\..*?$/\1.it$iteration_number.fasta/;
+	system("lastz $output_folder/Iteration$iteration_number/$new_contig_filename $output_folder/Iteration$iteration_number/$new_contig_filename --notransition --strand=both --step=20 --nogapped --format=rdotplot > $output_folder/Iteration$iteration_number/data_to_build_the_dotplot.txt");
+	system("Rscript $path_to_the_folder_where_Elloreas_is_located/make_dotplot_for_Elloreas.r $output_folder/Iteration$iteration_number/data_to_build_the_dotplot.txt $output_folder/Iteration$iteration_number/dotplot.it$iteration_number.jpeg \"Dot plot for the contig after iteration $iteration_number\"");
+	#removing the output data of lastz, because it is not needed.
+	system("rm -rf $output_folder/Iteration$iteration_number/data_to_build_the_dotplot.txt");
+	
 }
 
 
-print LOGILE "\nEnding, because Elloreas has reached the final iteration (number $max_number_of_cycles) according to the value provided by the user with the \"--maximum_number_of_iterations\" option.\n";
+print LOGFILE "\n\nEnding, because Elloreas has reached the final iteration (number $maximum_number_of_iterations) according to the value provided by the user with the \"--maximum_number_of_iterations\" option.\nThe length of the final contig is ".length($contig_sequence)." bp.";
+print HISTORY_OF_ALTERNATIVE_EXTENSIONS "\n\nElloreas has finished. See elloreas_logs.txt\n";
+open CONTIG_FROM_THE_FINAL_ITERATION, "> $output_folder/contig_from_the_final_iteration.fasta";
+print CONTIG_FROM_THE_FINAL_ITERATION ">$contig_title\n";
+print CONTIG_FROM_THE_FINAL_ITERATION "$contig_sequence\n";
+close(CONTIG_FROM_THE_FINAL_ITERATION);
+&make_the_final_coverage_plot_and_dot_plot();
 
 
 #this subroutine takes the sequence of the final contig produced by Elloreas and makes a coverage plot and a dot plot. Temporary files are deleted.
 sub make_the_final_coverage_plot_and_dot_plot()
 {
 		system("mkdir $output_folder/Temporary");
-		system("minimap2 -x $sequencing_technology -a --secondary no --sam-hit-only -o $output_folder/Temporary/mapping.sam -t $cores_to_use $output_folder/contig_from_the_final_iteration.fasta $reads_file_path");
+		system("minimap2 -x $sequencing_technology -a --secondary no --sam-hit-only -o $output_folder/Temporary/mapping.sam -t $number_of_CPU_threads_to_use $output_folder/contig_from_the_final_iteration.fasta $reads_file_path");
 		system("samtools view -Sbh $output_folder/Temporary/mapping.sam >$output_folder/Temporary/mapping.bam");
 		system("samtools sort $output_folder/Temporary/mapping.bam >$output_folder/Temporary/mapping.sorted.bam");
 		system("samtools index $output_folder/Temporary/mapping.sorted.bam");
 		system("bedtools genomecov -d -ibam $output_folder/Temporary/mapping.sorted.bam > $output_folder/Temporary/coverage_list.txt");
-		system("Rscript $path_to_the_folder_where_Elloreas_is_located/plot_coverage_for_Elloreas.r $output_folder/Temporary/coverage_list.txt $output_folder/coverage_plot_for_the_contig_from_the_final_iteration.jpeg");
+		system("Rscript $path_to_the_folder_where_Elloreas_is_located/plot_coverage_for_Elloreas.r $output_folder/Temporary/coverage_list.txt $output_folder/coverage_plot_for_the_contig_from_the_final_iteration.jpeg \"Coverage plot for the final contig produced by Elloreas\"");
 		#making the dotplot
 		system("lastz $output_folder/contig_from_the_final_iteration.fasta $output_folder/contig_from_the_final_iteration.fasta --notransition --strand=both --step=20 --nogapped --format=rdotplot > $output_folder/Temporary/data_to_build_the_dotplot.txt");
-		system("Rscript $path_to_the_folder_where_Elloreas_is_located/make_dotplot_for_Elloreas.r $output_folder/Temporary/data_to_build_the_dotplot.txt $output_folder/dotplot_for_the_contig_from_the_final_iteration.jpeg");
+		system("Rscript $path_to_the_folder_where_Elloreas_is_located/make_dotplot_for_Elloreas.r $output_folder/Temporary/data_to_build_the_dotplot.txt $output_folder/dotplot_for_the_contig_from_the_final_iteration.jpeg \"Dot plot for the final contig produced by Elloreas\"");
 		#removing the temporary folder
 		system("rm -rf $output_folder/Temporary");
 		#if the user asked for this, remove data from all iterations which haven't been deleted before (basically, its only the very last iteration)
@@ -743,13 +786,13 @@ sub take_parameters_from_the_command_line()
 	#assigning default values to parameters
 	$starter_file_path=""; #one of the two parameters that have no default values
 	$reads_file_path=""; #one of the two parameters that have no default values
-	$min_sequence_similarity="80%";
-	$min_aligned_length=5000;
-	$contig_edge_size_to_use_for_alignment=10000;
-	$min_allowed_total_number_of_extending_kmers=4;
+	$minimum_read_similarity="80%";
+	$minimum_length_of_mapped_read_part=5000;
+	$contig_edge_size_to_use_for_mapping=10000;
+	$minimum_total_number_of_extending_reads=4;
 	$min_allowed_ratio_of_extensions="1%";
-	$max_number_of_cycles=1000000;
-	$cores_to_use=10;
+	$maximum_number_of_iterations=1000000;
+	$number_of_CPU_threads_to_use=10;
 	$number_of_bases_to_trim_from_the_starter_edges_in_the_very_beginning_of_the_assembly=100;
 	$output_folder="Elloreas_output";
 	$min_allowed_number_of_reads_supporting_the_most_popular_extension=4;
@@ -757,6 +800,7 @@ sub take_parameters_from_the_command_line()
 	$sequencing_technology="oxford_nanopore";
 	$should_elloreas_delete_sam_and_bam_files="true";
 	$should_elloreas_delete_folders_of_all_iterations="false";
+	$should_elloreas_only_make_a_dot_plot_and_a_coverage_plot="false";
 
 	#$hash_list_of_allowed_keys_to_the_word_yes{"--reads"}="yes". Only the keys present in this hash are accepted from the user. If the user provides a key which is absent from this hash, Elloreas prints an error and stops. This hash has no values other than "yes".
 	%hash_list_of_allowed_keys_to_the_word_yes=(
@@ -776,6 +820,7 @@ sub take_parameters_from_the_command_line()
 	"--draw_coverage_plots"=>"yes",
 	"--delete_sam_and_bam"=>"yes",
 	"--delete_folders_of_iterations"=>"yes",
+	"--only_make_a_dot_plot_and_a_coverage_plot"=>"yes",
 	"--help"=>"yes",
 	"--version"=>"yes");
 	
@@ -827,9 +872,11 @@ Less important options (usually they shouldn't be changed):
 
 16) --delete_folders_of_iterations		Should Elloreas delete folders where it stores data corresponding to different iterations? Possible values: true or false. The default value is false. Switching this to true will safe a bit of disk space.
 
-17) --help		print this help
+17) --only_make_a_dot_plot_and_a_coverage_plot		With this option, Elloreas just builds a dot plot and a coverage plot for the starter and doesn't extend the starter. This option may be useful for checking whether there are misassemblies in the starter. Possible values: true or false. The default value is false.
 
-18) --version		print the version of Elloreas
+18) --help		print this help
+
+19) --version		print the version of Elloreas
 
 =====================================================================
 =====================================================================
@@ -879,12 +926,14 @@ HERE_DOCUMENT
 
 	$current_element_number=1;
 	%hash_input_key_to_input_value=(); #like {"--starter"}="/mnt/some_folder/starter.fasta"
+	@array_list_of_keys_with_their_values=(); #this array contains a sorted (in the order in which the user provided them) list of keys with their values. The array counts from 0. The values of the array look like "5) --starter /mnt/some_folder/starter.fasta."
 	while($current_element_number<=$number_of_elements_in_the_command)
 	{
 		$key=$ARGV[$current_element_number-1];
 		$value=$ARGV[$current_element_number];
 
-		$hash_input_key_to_input_value{$key}=$value;	
+		$hash_input_key_to_input_value{$key}=$value;
+		push(@array_list_of_keys_with_their_values,(($current_element_number+1)/2).") $key $value.");
 		$current_element_number+=2;
 		
 		#if the user has provided a value (not a key) starting with "--", this means he made a serious mistake (presumably involving a shift in key names) which probably makes impossible parsing the rest of commands and finding errors among them. This is why Elloreas should stop immediately after finding such a mistake.
@@ -927,38 +976,38 @@ HERE_DOCUMENT
 	}	
 	if($hash_input_key_to_input_value{"--minimum_read_similarity"}!~/^$/)
 	{
-		$min_sequence_similarity=$hash_input_key_to_input_value{"--minimum_read_similarity"};
-		if(($min_sequence_similarity!~/\d+\.\d+\%/)&&($min_sequence_similarity!~/\d+\%/))
+		$minimum_read_similarity=$hash_input_key_to_input_value{"--minimum_read_similarity"};
+		if(($minimum_read_similarity!~/\d+\.\d+\%/)&&($minimum_read_similarity!~/\d+\%/))
 		{
 			$number_of_the_current_error++;
-			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improperly formatted value with the \"--minimum_read_similarity\" key. It should be formatted as 80%, while your is \"$min_sequence_similarity\"\n";		
+			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improperly formatted value with the \"--minimum_read_similarity\" key. It should be formatted as 80%, while your is \"$minimum_read_similarity\"\n";		
 		}
 	}
 	if($hash_input_key_to_input_value{"--minimum_length_of_mapped_read_part"}!~/^$/)
 	{
-		$min_aligned_length=$hash_input_key_to_input_value{"--minimum_length_of_mapped_read_part"};
-		if($min_aligned_length!~/\d+/)
+		$minimum_length_of_mapped_read_part=$hash_input_key_to_input_value{"--minimum_length_of_mapped_read_part"};
+		if($minimum_length_of_mapped_read_part!~/\d+/)
 		{
 			$number_of_the_current_error++;
-			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improperly formatted value with the \"--minimum_length_of_mapped_read_part\" key. It should be formatted as 2000, while your is \"$min_aligned_length\"\n";		
+			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improperly formatted value with the \"--minimum_length_of_mapped_read_part\" key. It should be formatted as 2000, while your is \"$minimum_length_of_mapped_read_part\"\n";		
 		}
 	}
 	if($hash_input_key_to_input_value{"--contig_edge_size_to_use_for_mapping"}!~/^$/)
 	{
-		$contig_edge_size_to_use_for_alignment=$hash_input_key_to_input_value{"--contig_edge_size_to_use_for_mapping"};
-		if($contig_edge_size_to_use_for_alignment!~/\d+/)
+		$contig_edge_size_to_use_for_mapping=$hash_input_key_to_input_value{"--contig_edge_size_to_use_for_mapping"};
+		if($contig_edge_size_to_use_for_mapping!~/\d+/)
 		{
 			$number_of_the_current_error++;
-			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improperly formatted value with the \"--contig_edge_size_to_use_for_mapping\" key. It should be formatted as 20000, while your is \"$contig_edge_size_to_use_for_alignment\"\n";
+			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improperly formatted value with the \"--contig_edge_size_to_use_for_mapping\" key. It should be formatted as 20000, while your is \"$contig_edge_size_to_use_for_mapping\"\n";
 		}
 	}
 	if($hash_input_key_to_input_value{"--minimum_total_number_of_extending_reads"}!~/^$/)
 	{
-		$min_allowed_total_number_of_extending_kmers=$hash_input_key_to_input_value{"--minimum_total_number_of_extending_reads"};
-		if($min_allowed_total_number_of_extending_kmers!~/\d+/)
+		$minimum_total_number_of_extending_reads=$hash_input_key_to_input_value{"--minimum_total_number_of_extending_reads"};
+		if($minimum_total_number_of_extending_reads!~/\d+/)
 		{
 			$number_of_the_current_error++;
-			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improperly formatted value with the \"--minimum_total_number_of_extending_reads\" key. It should be formatted as 5, while your is \"$min_allowed_total_number_of_extending_kmers\"\n";
+			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improperly formatted value with the \"--minimum_total_number_of_extending_reads\" key. It should be formatted as 5, while your is \"$minimum_total_number_of_extending_reads\"\n";
 		}
 	}
 	if($hash_input_key_to_input_value{"--minimum_percent_of_reads_in_the_most_popular_extension"}!~/^$/)
@@ -972,20 +1021,20 @@ HERE_DOCUMENT
 	}
 	if($hash_input_key_to_input_value{"--maximum_number_of_iterations"}!~/^$/)
 	{
-		$max_number_of_cycles=$hash_input_key_to_input_value{"--maximum_number_of_iterations"};
-		if($max_number_of_cycles!~/\d+/)
+		$maximum_number_of_iterations=$hash_input_key_to_input_value{"--maximum_number_of_iterations"};
+		if($maximum_number_of_iterations!~/\d+/)
 		{
 			$number_of_the_current_error++;
-			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improperly formatted value with the \"--maximum_number_of_iterations\" key. It should be formatted as 1000, while your is \"$max_number_of_cycles\"\n";
+			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improperly formatted value with the \"--maximum_number_of_iterations\" key. It should be formatted as 1000, while your is \"$maximum_number_of_iterations\"\n";
 		}
 	}
 	if($hash_input_key_to_input_value{"--number_of_CPU_threads"}!~/^$/)
 	{
-		$cores_to_use=$hash_input_key_to_input_value{"--number_of_CPU_threads"};
-		if($cores_to_use!~/\d+/)
+		$number_of_CPU_threads_to_use=$hash_input_key_to_input_value{"--number_of_CPU_threads"};
+		if($number_of_CPU_threads_to_use!~/\d+/)
 		{
 			$number_of_the_current_error++;
-			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improperly formatted value with the \"--number_of_CPU_threads\" key. It should be formatted as 1000, while your is \"$cores_to_use\"\n";
+			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improperly formatted value with the \"--number_of_CPU_threads\" key. It should be formatted as 1000, while your is \"$number_of_CPU_threads_to_use\"\n";
 		}
 	}
 	if($hash_input_key_to_input_value{"--number_of_bases_to_trim_from_the_starter_edges"}!~/^$/)
@@ -1046,6 +1095,15 @@ HERE_DOCUMENT
 			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improper value with the \"--delete_folders_of_iterations\" key. It should be either true or false, while your is \"$should_elloreas_delete_folders_of_all_iterations\"\n";
 		}
 	}
+	if($hash_input_key_to_input_value{"--only_make_a_dot_plot_and_a_coverage_plot"}!~/^$/)
+	{
+		$should_elloreas_only_make_a_dot_plot_and_a_coverage_plot=$hash_input_key_to_input_value{"--only_make_a_dot_plot_and_a_coverage_plot"};
+		if($should_elloreas_only_make_a_dot_plot_and_a_coverage_plot!~/(true|false)/)
+		{
+			$number_of_the_current_error++;
+			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improper value with the \"--only_make_a_dot_plot_and_a_coverage_plot\" key. It should be either true or false, while your is \"$should_elloreas_only_make_a_dot_plot_and_a_coverage_plot\"\n";
+		}
+	}
 		
 		
 
@@ -1062,8 +1120,8 @@ HERE_DOCUMENT
 	}
 
 	#converting values that user provided as percents into decimals (like 80.2% to 0.802)
-	$min_sequence_similarity=~s/\%$//;
-	$min_sequence_similarity=$min_sequence_similarity/100;
+	$minimum_read_similarity=~s/\%$//;
+	$minimum_read_similarity=$minimum_read_similarity/100;
 	
 	$min_allowed_ratio_of_extensions=~s/\%$//;
 	$min_allowed_ratio_of_extensions=$min_allowed_ratio_of_extensions/100;
@@ -1074,11 +1132,11 @@ HERE_DOCUMENT
 	{
 		if(($sequencing_technology=~/^typical_pacbio$/)||($sequencing_technology=~/^oxford_nanopore$/))
 		{
-			$min_sequence_similarity=0.8;
+			$minimum_read_similarity=0.8;
 		}
 		if($sequencing_technology=~/^hifi_pacbio$/)
 		{
-			$min_sequence_similarity=0.98;
+			$minimum_read_similarity=0.98;
 		}
 	}
 
@@ -1246,15 +1304,14 @@ sub check_whether_required_parameters_and_scripts_exist()
 	}
 }
 
-#this subroutine prints a list of parameters provided by the user via the command line. It uses the hash $hash_input_key_to_input_value{$key} created by the subroutine &take_parameters_from_the_command_line
+#this subroutine prints a list of parameters provided by the user via the command line. It uses the array @array_list_of_keys_with_their_values created by the subroutine &take_parameters_from_the_command_line
+#lines look like "3) --number_of_CPU_threads 22."
 sub print_parameters_provided_by_the_user_via_the_command_line()
 {
 	print LOGFILE "You have provided the following options:\n";
-	$number_of_entered_option=0; 
-	foreach $key(keys(%hash_input_key_to_input_value))
+	foreach $element_of_the_array (@array_list_of_keys_with_their_values)
 	{
-		$number_of_entered_option++;
-		print LOGFILE "$number_of_entered_option) $key ".$hash_input_key_to_input_value{$key}.".\n";
+		print LOGFILE $element_of_the_array."\n";
 	}
 	print LOGFILE "\n\n";
 }

@@ -1,3 +1,8 @@
+Elloreas 1.16.
+1) Minor changes slightly improving the accuracy of Elloreas.
+2) Made the output of Elloreas a bit more readable.
+3) Added a new option "--only_make_a_dot_plot_and_a_coverage_plot". If Elloreas is run with this option, it only produces a dot plot and a coverage plot for the starter, without extending it. This option is useful for understanding whether the starter contains assembly errors. 
+
 Elloreas 1.15.
 Improved the algorithm for reads with many sequencing errors.
 
