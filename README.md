@@ -49,8 +49,9 @@ The main files produced by Elloreas are:
 2) history_of_alternative_extensions.txt - this file contains the list of alternative extensions present in each iteration of elongation. Only the top 5 most represented by reads extensions are listed there.
 3) contig_from_the_final_iteration.fasta - this is the final contig produced by Elloreas.
 4) coverage_plot_for_the_contig_from_the_final_iteration.jpeg and dotplot_for_the_contig_from_the_final_iteration.jpeg - these two figures represent a read coverage distribution and a dotplot for the final contig produced by Elloreas.
+5) Files named like Iteration15/contig.it15.fasta - they contain the contig as it was after a particular iteration of elongation (after the 15th iteration in this example). Such contig files are formed at the end of each iteration.
 
-You can read about other files produced by Elloreas in the full version of the manual (manual.pdf).
+You can read about less important files produced by Elloreas in manual.pdf.
   
 <br />
 
