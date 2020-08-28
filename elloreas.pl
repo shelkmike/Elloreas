@@ -3,7 +3,7 @@
 =head
 Elloreas, a genome assembler. https://github.com/shelkmike/Elloreas
 =cut
-$Elloreas_version="1.16";
+$Elloreas_version="1.17";
 
 
 #determining the path to the folder where Elloreas is located. It is needed to run auxiliary scripts like plot_coverage_for_Elloreas.r
@@ -885,10 +885,10 @@ A simple example:
 perl elloreas.pl --reads reads.fastq --starter starter.fasta
 
 A not so simple example:
-perl elloreas.pl --reads reads.fastq --starter starter.fasta --sequencing_technology oxford_nanopore --minimum_length_of_aligned_read_part 8000
+perl elloreas.pl --reads reads.fastq --starter starter.fasta --sequencing_technology oxford_nanopore --minimum_length_of_mapped_read_part 8000
 
 A more elaborate example:
-perl /home/user/Work/Tools/Elloreas/elloreas.pl --reads /home/user/data/Reads/RLT1742.fastq --starter /home/user/data/Assembly/contig_1_from_Spades_assembly.fasta --output_folder /home/user/data/Assembly/Elloreas/Output --sequencing_technology typical_pacbio --minimum_length_of_aligned_read_part 8000 --number_of_CPU_threads 20 --delete_sam_and_bam false --minimum_read_similarity 90%
+perl /home/user/Work/Tools/Elloreas/elloreas.pl --reads /home/user/data/Reads/RLT1742.fastq --starter /home/user/data/Assembly/contig_1_from_Spades_assembly.fasta --output_folder /home/user/data/Assembly/Elloreas/Output --sequencing_technology typical_pacbio --minimum_length_of_mapped_read_part 8000 --number_of_CPU_threads 20 --delete_sam_and_bam false --minimum_read_similarity 90%
 		
 =====================================================================
 =====================================================================

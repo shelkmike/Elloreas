@@ -9,7 +9,7 @@ A simple version, which will often be enough:
 `perl elloreas.pl --reads reads.fastq --starter starter.fasta`
 
 A slightly more complicated version:  
-`perl elloreas.pl --reads reads.fastq --starter starter.fasta --sequencing_technology oxford_nanopore --minimum_length_of_aligned_read_part 8000`
+`perl elloreas.pl --reads reads.fastq --starter starter.fasta --sequencing_technology oxford_nanopore --minimum_length_of_mapped_read_part 8000`
 
 For a full list of parameters with suggestions on how to use them run  
 `perl elloreas.pl --help`
@@ -52,7 +52,7 @@ The main files produced by Elloreas are:
 5) Files named like Iteration15/contig.it15.fasta - they contain the contig as it was after a particular iteration of elongation (after the 15th iteration in this example). Such contig files are formed at the end of each iteration.
 
 You can read about less important files produced by Elloreas in manual.pdf.
-  
+   
 <br />
 
 ### Caveats:
