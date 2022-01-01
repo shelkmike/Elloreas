@@ -61,7 +61,7 @@ Don't forget to include all sequences from your genome during polishing. Otherwi
   
 <br />
 
-### Frequently asked questions:
+### Questions and answers:
 1) How to cite Elloreas?<br />
 
 Cite the paper ["Mitochondrial genome of Fagopyrum esculentum and the genetic diversity of extranuclear genomes in buckwheat"](https://pubmed.ncbi.nlm.nih.gov/32408719/) where Elloreas was first described.
