@@ -1,3 +1,10 @@
+Elloreas 1.18
+1) Added an option "--stop_when_circular". It controls whether Elloreas should stop elongation when the contig becomes circular, i.e. when the 5' end of the contig is identical to the 3' end of the contig. Possible values: true or false. The default value is true.
+2) Now pictures are made in .pdf instead of .jpeg
+3) Now HiFi reads are aligned with the Minimap2 option "map-hifi" instead of "asm20".
+4) Now the option "--draw_coverage_plots" creates coverage plots for the entire contig instead of the 3' end.
+5) Several small changes.
+
 Elloreas 1.17.
 Minor changes in the description of the program.
 
