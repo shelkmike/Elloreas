@@ -3,7 +3,7 @@
 =head
 Elloreas, a genome assembler. https://github.com/shelkmike/Elloreas
 =cut
-$Elloreas_version="1.17";
+$Elloreas_version="1.18";
 
 
 #determining the path to the folder where Elloreas is located. It is needed to run auxiliary scripts like plot_coverage_for_Elloreas.r
@@ -27,14 +27,15 @@ if($should_elloreas_only_make_a_dot_plot_and_a_coverage_plot=~/true/)
 {
 	system("mkdir $output_folder/Temporary");
 	system("minimap2 -x $sequencing_technology -a --secondary no --sam-hit-only -o $output_folder/Temporary/mapping.sam -t $number_of_CPU_threads_to_use $starter_file_path $reads_file_path");
-	system("samtools view -Sbh $output_folder/Temporary/mapping.sam >$output_folder/Temporary/mapping.bam");
-	system("samtools sort $output_folder/Temporary/mapping.bam >$output_folder/Temporary/mapping.sorted.bam");
-	system("samtools index $output_folder/Temporary/mapping.sorted.bam");
-	system("bedtools genomecov -d -ibam $output_folder/Temporary/mapping.sorted.bam > $output_folder/Temporary/coverage_list.txt");
-	system("Rscript $path_to_the_folder_where_Elloreas_is_located/plot_coverage_for_Elloreas.r $output_folder/Temporary/coverage_list.txt $output_folder/coverage_plot_for_the_starter.jpeg \"Coverage plot for the starter\"");
+	system("python3 $path_to_the_folder_where_Elloreas_is_located/simplify_single_end_sam_by_minoverlap_and_minidentity.py $output_folder/Temporary/mapping.sam $minimum_length_of_mapped_read_part $minimum_read_similarity $output_folder/Temporary/mapping_filtered.sam");
+	system("samtools view -Sbh $output_folder/Temporary/mapping_filtered.sam >$output_folder/Temporary/mapping_filtered.bam");
+	system("samtools sort $output_folder/Temporary/mapping_filtered.bam >$output_folder/Temporary/mapping_filtered.sorted.bam");
+	system("samtools index $output_folder/Temporary/mapping_filtered.sorted.bam");
+	system("bedtools genomecov -d -ibam $output_folder/Temporary/mapping_filtered.sorted.bam > $output_folder/Temporary/coverage_list.txt");
+	system("Rscript $path_to_the_folder_where_Elloreas_is_located/plot_coverage_for_Elloreas.r $output_folder/Temporary/coverage_list.txt $output_folder/coverage_plot_for_the_starter.pdf \"Coverage plot for the starter\"");
 	#making the dotplot
 	system("lastz $starter_file_path $starter_file_path --notransition --strand=both --step=20 --nogapped --format=rdotplot > $output_folder/Temporary/data_to_build_the_dotplot.txt");
-	system("Rscript $path_to_the_folder_where_Elloreas_is_located/make_dotplot_for_Elloreas.r $output_folder/Temporary/data_to_build_the_dotplot.txt $output_folder/dotplot_for_the_starter.jpeg \"Dot plot for the starter\"");
+	system("Rscript $path_to_the_folder_where_Elloreas_is_located/make_dotplot_for_Elloreas.r $output_folder/Temporary/data_to_build_the_dotplot.txt $output_folder/dotplot_for_the_starter.pdf \"Dot plot for the starter\"");
 	#removing the temporary folder
 	system("rm -rf $output_folder/Temporary");
 	print LOGFILE "Elloreas has finished building a dot plot and a coverage plot for the starter.";
@@ -126,15 +127,6 @@ foreach $iteration_number(1..$maximum_number_of_iterations)
 	#mapping reads
 	system("minimap2 -x $sequencing_technology -a --secondary no --end-bonus 100 --sam-hit-only -o $output_folder/Iteration$iteration_number/mapping.it$iteration_number.sam -t $number_of_CPU_threads_to_use $output_folder/Iteration$iteration_number/Edge_iteration$iteration_number.fasta $reads_file_path");
 	
-	#if required, make a coverage plot. To do this, I first need to convert sam to bam
-	if($should_elloreas_draw_coverage_plots=~/true/)
-	{
-		system("samtools view -Sbh $output_folder/Iteration$iteration_number/mapping.it$iteration_number.sam >$output_folder/Iteration$iteration_number/mapping.it$iteration_number.bam");
-		system("samtools sort $output_folder/Iteration$iteration_number/mapping.it$iteration_number.bam >$output_folder/Iteration$iteration_number/mapping.it$iteration_number.sorted.bam");
-		system("samtools index $output_folder/Iteration$iteration_number/mapping.it$iteration_number.sorted.bam");
-		system("bedtools genomecov -d -ibam $output_folder/Iteration$iteration_number/mapping.it$iteration_number.sorted.bam > $output_folder/Iteration$iteration_number/coverage_list.it$iteration_number.txt");
-		system("Rscript $path_to_the_folder_where_Elloreas_is_located/plot_coverage_for_Elloreas.r $output_folder/Iteration$iteration_number/coverage_list.it$iteration_number.txt $output_folder/Iteration$iteration_number/edge_coverage_plot.it$iteration_number.jpeg \"Coverage plot for the contig\'s 3\' edge used for iteration $iteration_number\"");
-	}
 	
 	#first, I go through the sam-file to determine the median length of read's overhangs. (but counting it only using reads for which at least $minimum_length_of_mapped_read_part bases were mapped)
 	@array_of_overhang_lengths=();
@@ -674,62 +666,92 @@ foreach $iteration_number(1..$maximum_number_of_iterations)
 	
 	$current_contig_filename=$new_contig_filename;
 	
-	#now check with BLAST whether Elloreas has a terminal sequence which causes eternal looping.
-	system("blastn -task megablast -query $output_folder/Iteration$iteration_number/$current_contig_filename -subject $output_folder/Iteration$iteration_number/$current_contig_filename -out $output_folder/Iteration$iteration_number/megablast_results.it$iteration_number.txt -outfmt \"6 qseqid sseqid evalue pident qstart qend sstart send length sstrand\" -num_threads $number_of_CPU_threads_to_use -max_target_seqs 1 -max_hsps 1000000 -evalue 1e-10");
-	open BLAST_RESULTS, "< $output_folder/Iteration$iteration_number/megablast_results.it$iteration_number.txt";
-	@array_file_with_blast_results=<BLAST_RESULTS>;
+	if($should_elloreas_stop_when_the_contig_becomes_circular =~ /true/)
+	{
+		#now check with BLAST whether Elloreas has a terminal sequence which causes eternal looping.
+		system("blastn -task megablast -query $output_folder/Iteration$iteration_number/$current_contig_filename -subject $output_folder/Iteration$iteration_number/$current_contig_filename -out $output_folder/Iteration$iteration_number/megablast_results.it$iteration_number.txt -outfmt \"6 qseqid sseqid evalue pident qstart qend sstart send length sstrand\" -num_threads $number_of_CPU_threads_to_use -max_target_seqs 1 -max_hsps 1000000 -evalue 1e-10");
+		open BLAST_RESULTS, "< $output_folder/Iteration$iteration_number/megablast_results.it$iteration_number.txt";
+		@array_file_with_blast_results=<BLAST_RESULTS>;
 =head
 Paenibacillus_sp_RUD330__starting_from_dnaA	Paenibacillus_sp_RUD330__starting_from_dnaA	0.0	100.000	1	31825	1	31825	31825	plus
 Paenibacillus_sp_RUD330__starting_from_dnaA	Paenibacillus_sp_RUD330__starting_from_dnaA	0.0	81.068	26531	31721	21236	26451	5467	plus
 =cut
-	#if there is only one BLAST result, then there are no repeats at all, because the first line ($array_file_with_blast_results[0]) is always the alignment of the entire contig to itself.
-	if($array_file_with_blast_results[1])
-	{
-		$line_number=1;
-		#print LOGFILE, "Blast results string for the repeat with the highest e-value: $array_file_with_blast_results[1] (even if the looping repeat exists, it is not always the looping repeat";
-		while($array_file_with_blast_results[$line_number])
+		#if there is only one BLAST result, then there are no repeats at all, because the first line ($array_file_with_blast_results[0]) is always the alignment of the entire contig to itself.
+		if($array_file_with_blast_results[1])
 		{
-			#$array_string_split[9]=~/plus/ is checked because inverted repeats do not cause loops.
-			#also checking that the repeat is perfect (100% sequence similarity)
-			@array_string_split=split(/\t/,$array_file_with_blast_results[$line_number]);
-			if((($array_string_split[5]==length($contig_sequence))||($array_string_split[7]==length($contig_sequence)))&&($array_string_split[9]=~/plus/)&&($array_string_split[8]>=$minimum_length_of_mapped_read_part)&&($array_string_split[3]==100))
+			$line_number=1;
+			#print LOGFILE, "Blast results string for the repeat with the highest e-value: $array_file_with_blast_results[1] (even if the looping repeat exists, it is not always the looping repeat";
+			while($array_file_with_blast_results[$line_number])
 			{
-				print LOGFILE "\n\nEnding, because Elloreas has entered an eternal loop. This means one of the following two things:\n";
-				print LOGFILE "1) You have assembled a circular genome.\n";
-				print LOGFILE "2) There is a large repeat with one repeat unit somewhere within the contig and the other repeat unit at the right (3') edge of the contig.\n";
-				print LOGFILE "To differentiate between these two cases you can look at the dot plot created by Elloreas (dot_plot_for_the_contig_from_the_final_iteration.jpeg). If you see one repeat unit at the left (5') edge of the contig and the other at the right edge (3'), this means that the contig has circularized (\"1)\"). Basically, during the elongation process Elloreas has started creating on its right edge the same sequence as is on its left edge. If this is a circular genome, you can now remove one of these repeat instances.\n";
-				print LOGFILE "If you see that the left repeat unit is not at the left edge of the contig, this means you have encountered a long repeat present in your genome (\"2)\"). Letting Elloreas work further will make him fall into an eternal loop, forever looping between these two repeat units. You may want to look in the file history_of_alternative_extensions.txt to find a highly supported alternative extension in one of recent iterations of Elloreas, and then choose this alternative extension. See the part of the Frequently Asked Questions called \"There was a fork at some iteration. Elloreas chose one of alternative extensions, but I want to try another one. What should I do?\"\n";
-				#Suppressed the output of the final contig length because it distracts the user from a more important text above
-				#print LOGFILE "\nThe length of the final contig is ".length($contig_sequence)." bp.";
-				print HISTORY_OF_ALTERNATIVE_EXTENSIONS "\nElloreas has finished. See elloreas_logs.txt\n";
-				open CONTIG_FROM_THE_FINAL_ITERATION, "> $output_folder/contig_from_the_final_iteration.fasta";
-				print CONTIG_FROM_THE_FINAL_ITERATION ">$contig_title\n";
-				print CONTIG_FROM_THE_FINAL_ITERATION "$contig_sequence\n";
-				close(CONTIG_FROM_THE_FINAL_ITERATION);
-				&make_the_final_coverage_plot_and_dot_plot();
-				exit();
+				#$array_string_split[9]=~/plus/ is checked because inverted repeats do not cause loops.
+				#also checking that the repeat is perfect (100% sequence similarity)
+				@array_string_split=split(/\t/,$array_file_with_blast_results[$line_number]);
+				if((($array_string_split[5]==length($contig_sequence))||($array_string_split[7]==length($contig_sequence)))&&($array_string_split[9]=~/plus/)&&($array_string_split[8]>=$minimum_length_of_mapped_read_part)&&($array_string_split[3]==100))
+				{
+					print LOGFILE "\n\nEnding, because Elloreas has entered an eternal loop. This means one of the following two things:\n";
+					print LOGFILE "1) You have assembled a circular genome.\n";
+					print LOGFILE "2) There is a large repeat with one repeat unit somewhere within the contig and the other repeat unit at the right (3') edge of the contig.\n";
+					print LOGFILE "To differentiate between these two cases you can look at the dot plot created by Elloreas (dot_plot_for_the_contig_from_the_final_iteration.pdf). If you see one repeat unit at the left (5') edge of the contig and the other at the right edge (3'), this means that the contig has circularized (\"1)\"). Basically, during the elongation process Elloreas has started creating on its right edge the same sequence as is on its left edge. If this is a circular genome, you can now remove one of these repeat instances.\n";
+					print LOGFILE "If you see that the left repeat unit is not at the left edge of the contig, this means you have encountered a long repeat present in your genome (\"2)\"). Letting Elloreas work further will make him fall into an eternal loop, forever looping between these two repeat units. You may want to look in the file history_of_alternative_extensions.txt to find a highly supported alternative extension in one of recent iterations of Elloreas, and then choose this alternative extension. See the part of the Frequently Asked Questions called \"There was a fork at some iteration. Elloreas chose one of alternative extensions, but I want to try another one. What should I do?\"\n";
+					#Suppressed the output of the final contig length because it distracts the user from a more important text above
+					#print LOGFILE "\nThe length of the final contig is ".length($contig_sequence)." bp.";
+					print HISTORY_OF_ALTERNATIVE_EXTENSIONS "\nElloreas has finished. See elloreas_logs.txt\n";
+					open CONTIG_FROM_THE_FINAL_ITERATION, "> $output_folder/contig_from_the_final_iteration.fasta";
+					print CONTIG_FROM_THE_FINAL_ITERATION ">$contig_title\n";
+					print CONTIG_FROM_THE_FINAL_ITERATION "$contig_sequence\n";
+					close(CONTIG_FROM_THE_FINAL_ITERATION);
+					&make_the_final_coverage_plot_and_dot_plot();
+					exit();
+				}
+				else
+				{
+					#print LOGFILE "Not stopping Elloreas, BLAST line is $array_file_with_blast_results[$line_number] , values are ".$array_string_split[5]." ".length($contig_sequence)." ".$array_string_split[7]." ".length($contig_sequence)." ".$array_string_split[9]." ".$array_string_split[8]." ".$minimum_length_of_mapped_read_part."\n";
+				}
+				$line_number++;
 			}
-			else
-			{
-				#print LOGFILE "Not stopping Elloreas, BLAST line is $array_file_with_blast_results[$line_number] , values are ".$array_string_split[5]." ".length($contig_sequence)." ".$array_string_split[7]." ".length($contig_sequence)." ".$array_string_split[9]." ".$array_string_split[8]." ".$minimum_length_of_mapped_read_part."\n";
-			}
-			$line_number++;
+			
 		}
-		
+		else
+		{
+			#print LOGFILE, "Self-BLAST suggests that there are no repeats at all\n";
+		}
+		close(BLAST_RESULTS);
 	}
-	else
-	{
-		#print LOGFILE, "Self-BLAST suggests that there are no repeats at all\n";
-	}
-	close(BLAST_RESULTS);
 	
 	#before going to the next iteration, I make a dot plot. It may be useful for a user, though this is not required for Elloreas's work.
 	$new_contig_filename=$starter_file_path;
 	$new_contig_filename=~s/^(.+)\..*?$/\1.it$iteration_number.fasta/;
 	system("lastz $output_folder/Iteration$iteration_number/$new_contig_filename $output_folder/Iteration$iteration_number/$new_contig_filename --notransition --strand=both --step=20 --nogapped --format=rdotplot > $output_folder/Iteration$iteration_number/data_to_build_the_dotplot.txt");
-	system("Rscript $path_to_the_folder_where_Elloreas_is_located/make_dotplot_for_Elloreas.r $output_folder/Iteration$iteration_number/data_to_build_the_dotplot.txt $output_folder/Iteration$iteration_number/dotplot.it$iteration_number.jpeg \"Dot plot for the contig after iteration $iteration_number\"");
+	system("Rscript $path_to_the_folder_where_Elloreas_is_located/make_dotplot_for_Elloreas.r $output_folder/Iteration$iteration_number/data_to_build_the_dotplot.txt $output_folder/Iteration$iteration_number/dotplot.pdf \"Dot plot for the contig after iteration $iteration_number\"");
 	#removing the output data of lastz, because it is not needed.
 	system("rm -rf $output_folder/Iteration$iteration_number/data_to_build_the_dotplot.txt");
+	
+	#if the user requested it, Elloreas builds a coverage plot for the whole contig after this iteration of extension
+	if($should_elloreas_draw_coverage_plots=~/true/)
+	{
+		system("minimap2 -x $sequencing_technology -a --secondary no --sam-hit-only -o $output_folder/Iteration$iteration_number/mapping_for_the_whole_contig.sam -t $number_of_CPU_threads_to_use $output_folder/Iteration$iteration_number/$new_contig_filename $reads_file_path");
+		system("python3 $path_to_the_folder_where_Elloreas_is_located/simplify_single_end_sam_by_minoverlap_and_minidentity.py $output_folder/Iteration$iteration_number/mapping_for_the_whole_contig.sam $minimum_length_of_mapped_read_part $minimum_read_similarity $output_folder/Iteration$iteration_number/mapping_for_the_whole_contig__filtered.sam");
+		system("samtools view -Sbh $output_folder/Iteration$iteration_number/mapping_for_the_whole_contig__filtered.sam >$output_folder/Iteration$iteration_number/mapping_for_the_whole_contig__filtered.bam");
+		system("samtools sort $output_folder/Iteration$iteration_number/mapping_for_the_whole_contig__filtered.bam >$output_folder/Iteration$iteration_number/mapping_for_the_whole_contig__filtered.sorted.bam");
+		system("samtools index $output_folder/Iteration$iteration_number/mapping_for_the_whole_contig__filtered.sorted.bam");
+		system("bedtools genomecov -d -ibam $output_folder/Iteration$iteration_number/mapping_for_the_whole_contig__filtered.sorted.bam > $output_folder/Iteration$iteration_number/coverage_list.txt");
+		system("Rscript $path_to_the_folder_where_Elloreas_is_located/plot_coverage_for_Elloreas.r $output_folder/Iteration$iteration_number/coverage_list.txt $output_folder/Iteration$iteration_number/coverage_plot.pdf \"Coverage plot after iteration $iteration_number\"");
+		
+		if ($should_elloreas_delete_sam_and_bam_files =~ /true/)
+		{
+			system("rm -f $output_folder/Iteration$iteration_number/mapping_for_the_whole_contig.sam");
+			system("rm -f $output_folder/Iteration$iteration_number/mapping_for_the_whole_contig__filtered.sam");
+			system("rm -f $output_folder/Iteration$iteration_number/mapping_for_the_whole_contig__filtered.bam");
+			system("rm -f $output_folder/Iteration$iteration_number/mapping_for_the_whole_contig__filtered.sorted.bam");
+			system("rm -f $output_folder/Iteration$iteration_number/mapping_for_the_whole_contig__filtered.sorted.bam.bai");
+		}
+	}
+
+	#if the user asked for this, remove data from all iterations which haven't been deleted before (basically, its only the very last iteration)
+	if($should_elloreas_delete_folders_of_all_iterations=~/true/)
+	{
+		system("rm -rf ./$output_folder/Iteration*");
+	}
 	
 }
 
@@ -748,14 +770,15 @@ sub make_the_final_coverage_plot_and_dot_plot()
 {
 		system("mkdir $output_folder/Temporary");
 		system("minimap2 -x $sequencing_technology -a --secondary no --sam-hit-only -o $output_folder/Temporary/mapping.sam -t $number_of_CPU_threads_to_use $output_folder/contig_from_the_final_iteration.fasta $reads_file_path");
-		system("samtools view -Sbh $output_folder/Temporary/mapping.sam >$output_folder/Temporary/mapping.bam");
-		system("samtools sort $output_folder/Temporary/mapping.bam >$output_folder/Temporary/mapping.sorted.bam");
-		system("samtools index $output_folder/Temporary/mapping.sorted.bam");
-		system("bedtools genomecov -d -ibam $output_folder/Temporary/mapping.sorted.bam > $output_folder/Temporary/coverage_list.txt");
-		system("Rscript $path_to_the_folder_where_Elloreas_is_located/plot_coverage_for_Elloreas.r $output_folder/Temporary/coverage_list.txt $output_folder/coverage_plot_for_the_contig_from_the_final_iteration.jpeg \"Coverage plot for the final contig produced by Elloreas\"");
+		system("python3 $path_to_the_folder_where_Elloreas_is_located/simplify_single_end_sam_by_minoverlap_and_minidentity.py $output_folder/Temporary/mapping.sam $minimum_length_of_mapped_read_part $minimum_read_similarity $output_folder/Temporary/mapping_filtered.sam");
+		system("samtools view -Sbh $output_folder/Temporary/mapping_filtered.sam >$output_folder/Temporary/mapping_filtered.bam");
+		system("samtools sort $output_folder/Temporary/mapping_filtered.bam >$output_folder/Temporary/mapping_filtered.sorted.bam");
+		system("samtools index $output_folder/Temporary/mapping_filtered.sorted.bam");
+		system("bedtools genomecov -d -ibam $output_folder/Temporary/mapping_filtered.sorted.bam > $output_folder/Temporary/coverage_list.txt");
+		system("Rscript $path_to_the_folder_where_Elloreas_is_located/plot_coverage_for_Elloreas.r $output_folder/Temporary/coverage_list.txt $output_folder/coverage_plot_for_the_contig_from_the_final_iteration.pdf \"Coverage plot for the final contig produced by Elloreas\"");
 		#making the dotplot
 		system("lastz $output_folder/contig_from_the_final_iteration.fasta $output_folder/contig_from_the_final_iteration.fasta --notransition --strand=both --step=20 --nogapped --format=rdotplot > $output_folder/Temporary/data_to_build_the_dotplot.txt");
-		system("Rscript $path_to_the_folder_where_Elloreas_is_located/make_dotplot_for_Elloreas.r $output_folder/Temporary/data_to_build_the_dotplot.txt $output_folder/dotplot_for_the_contig_from_the_final_iteration.jpeg \"Dot plot for the final contig produced by Elloreas\"");
+		system("Rscript $path_to_the_folder_where_Elloreas_is_located/make_dotplot_for_Elloreas.r $output_folder/Temporary/data_to_build_the_dotplot.txt $output_folder/dotplot_for_the_contig_from_the_final_iteration.pdf \"Dot plot for the final contig produced by Elloreas\"");
 		#removing the temporary folder
 		system("rm -rf $output_folder/Temporary");
 		#if the user asked for this, remove data from all iterations which haven't been deleted before (basically, its only the very last iteration)
@@ -797,6 +820,7 @@ sub take_parameters_from_the_command_line()
 	$output_folder="Elloreas_output";
 	$min_allowed_number_of_reads_supporting_the_most_popular_extension=4;
 	$should_elloreas_draw_coverage_plots="false";
+	$should_elloreas_stop_when_the_contig_becomes_circular="true";
 	$sequencing_technology="oxford_nanopore";
 	$should_elloreas_delete_sam_and_bam_files="true";
 	$should_elloreas_delete_folders_of_all_iterations="false";
@@ -818,6 +842,7 @@ sub take_parameters_from_the_command_line()
 	"--maximum_number_of_iterations"=>"yes",
 	"--number_of_bases_to_trim_from_the_starter_edges"=>"yes",
 	"--draw_coverage_plots"=>"yes",
+	"--stop_when_circular"=>"yes",
 	"--delete_sam_and_bam"=>"yes",
 	"--delete_folders_of_iterations"=>"yes",
 	"--only_make_a_dot_plot_and_a_coverage_plot"=>"yes",
@@ -866,17 +891,19 @@ Less important options (usually they shouldn't be changed):
 
 13) --number_of_bases_to_trim_from_the_starter_edges		How many bases to trim from both edges of the starter at the very beginning of the work of Elloreas. Trimming some bases is useful because there may be assembly errors at the edge of the starter. The default value is 100.
 
-14) --draw_coverage_plots		Should coverage plots be drawn for contig edges at each iteration? Possible values: true or false. The default value is false. Making coverage plots slightly increases the computation time of Elloreas.
+14) --stop_when_circular		Should Elloreas stop when the contig becomes circular, i.e. when the 5' end of the contig is identical to the 3' end of the contig. Possible values: true or false. The default value is true.
 
-15) --delete_sam_and_bam		Should sam and bam files produced during each iteration be kept? Possible values: true or false. The default value is true. Keeping these files increases the disk space required for Elloreas.
+15) --draw_coverage_plots		Should coverage plots be drawn after each iteration? Possible values: true or false. The default value is false. Making coverage plots increases the computation time of Elloreas.
 
-16) --delete_folders_of_iterations		Should Elloreas delete folders where it stores data corresponding to different iterations? Possible values: true or false. The default value is false. Switching this to true will safe a bit of disk space.
+16) --delete_sam_and_bam		Should sam and bam files produced during each iteration be kept? Possible values: true or false. The default value is true. Keeping these files increases the disk space required for Elloreas.
 
-17) --only_make_a_dot_plot_and_a_coverage_plot		With this option, Elloreas just builds a dot plot and a coverage plot for the starter and doesn't extend the starter. This option may be useful for checking whether there are misassemblies in the starter. Possible values: true or false. The default value is false.
+17) --delete_folders_of_iterations		Should Elloreas delete folders where it stores data corresponding to different iterations? Possible values: true or false. The default value is false. Switching this to true will safe a bit of disk space.
 
-18) --help		print this help
+18) --only_make_a_dot_plot_and_a_coverage_plot		With this option, Elloreas just builds a dot plot and a coverage plot for the starter and doesn't extend the starter. This option may be useful for checking whether there are misassemblies in the starter. Possible values: true or false. The default value is false.
 
-19) --version		print the version of Elloreas
+19) --help		print this help
+
+20) --version		print the version of Elloreas
 
 =====================================================================
 =====================================================================
@@ -1059,6 +1086,15 @@ HERE_DOCUMENT
 			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improperly formatted value with the \"--minimum_number_of_reads_in_the_most_popular_extension\" key. It should be formatted as 2, while your is \"$min_allowed_number_of_reads_supporting_the_most_popular_extension\"\n";
 		}
 	}
+	if($hash_input_key_to_input_value{"--stop_when_circular"}!~/^$/)
+	{
+		$should_elloreas_stop_when_the_contig_becomes_circular=$hash_input_key_to_input_value{"--stop_when_circular"};
+		if($should_elloreas_stop_when_the_contig_becomes_circular!~/(true|false)/)
+		{
+			$number_of_the_current_error++;
+			$list_of_errors_in_the_input_command__to_print.=$number_of_the_current_error.") You have provided an improper value with the \"--stop_when_circular\" key. It should be either true or false, while your is \"$should_elloreas_stop_when_the_contig_becomes_circular\"\n";
+		}
+	}
 	if($hash_input_key_to_input_value{"--draw_coverage_plots"}!~/^$/)
 	{
 		$should_elloreas_draw_coverage_plots=$hash_input_key_to_input_value{"--draw_coverage_plots"};
@@ -1151,7 +1187,7 @@ HERE_DOCUMENT
 	}
 	if($sequencing_technology=~/^hifi_pacbio$/)
 	{
-		$sequencing_technology="asm20";
+		$sequencing_technology="map-hifi";
 	}
 
 	#If there exist errors in the input, Elloreas prints them and exits. It doesn't print them to "elloreas_logs.txt", because the path to the output folder is one of the parameters. Instead, Elloreas prints errors to the standard output.
@@ -1162,7 +1198,7 @@ HERE_DOCUMENT
 	}
 }
 
-#this subroutine checks whether programs required by Elloreas exist in $PATH and whether there are scripts plot_coverage_for_Elloreas.r and make_dotplot_for_Elloreas.r in the same folder where elloreas.pl lies.
+#this subroutine checks whether programs required by Elloreas exist in $PATH and whether there are scripts plot_coverage_for_Elloreas.r, make_dotplot_for_Elloreas.r and simplify_single_end_sam_by_minoverlap_and_minidentity.py in the same folder where elloreas.pl lies.
 sub check_whether_required_parameters_and_scripts_exist()
 {
 	$are_there_missing_programs="no"; #"no" if not, "yes" if there are missing programs
@@ -1267,7 +1303,7 @@ sub check_whether_required_parameters_and_scripts_exist()
 		$are_there_missing_programs="yes";
 	}	
 	
-	#now checking the presence of scripts plot_coverage_for_Elloreas.r and make_dotplot_for_Elloreas.r which should lie in the same folder as elloreas.pl
+	#now checking the presence of scripts plot_coverage_for_Elloreas.r, make_dotplot_for_Elloreas.r and simplify_single_end_sam_by_minoverlap_and_minidentity.py which should lie in the same folder as elloreas.pl
 	$presumed_path_to__plot_coverage_for_Elloreas=$path_to_the_folder_where_Elloreas_is_located."/plot_coverage_for_Elloreas.r";
 	$presumed_path_to__plot_coverage_for_Elloreas=~s/\/\//\//g; #replacing // in the path by / . This doesn't change the accessibility of this script, but looks better.
 	if(-e $presumed_path_to__plot_coverage_for_Elloreas)
@@ -1290,6 +1326,18 @@ sub check_whether_required_parameters_and_scripts_exist()
 	else
 	{
 		print LOGFILE "make_dotplot_for_Elloreas.r is absent. It is provided with Elloreas and should lie in the same folder where elloreas.pl is located ($path_to_the_folder_where_Elloreas_is_located). If you cannot find it, you can download it with Elloreas from https://github.com/shelkmike/Elloreas/releases.\n";
+		$are_there_missing_programs="yes";
+	}	
+	
+	$presumed_path_to__simplify_single_end_sam_by_minoverlap_and_minidentity=$path_to_the_folder_where_Elloreas_is_located."/simplify_single_end_sam_by_minoverlap_and_minidentity.py";
+	$presumed_path_to__simplify_single_end_sam_by_minoverlap_and_minidentity=~s/\/\//\//g; #replacing // in the path by / . This doesn't change the accessibility of this script, but looks better.
+	if(-e $presumed_path_to__simplify_single_end_sam_by_minoverlap_and_minidentity)
+	{
+		print LOGFILE "$presumed_path_to__simplify_single_end_sam_by_minoverlap_and_minidentity is present\n";
+	}
+	else
+	{
+		print LOGFILE "simplify_single_end_sam_by_minoverlap_and_minidentity.py is absent. It is provided with Elloreas and should lie in the same folder where elloreas.pl is located ($path_to_the_folder_where_Elloreas_is_located). If you cannot find it, you can download it with Elloreas from https://github.com/shelkmike/Elloreas/releases.\n";
 		$are_there_missing_programs="yes";
 	}	
 	
