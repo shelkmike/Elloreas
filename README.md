@@ -32,7 +32,7 @@ Elloreas is useful to:
 ### Requirements:
 Perl  
 R  
-minimap2  
+minimap 2.19 or newer  
 samtools  
 BLAST+  
 bedtools  
@@ -41,7 +41,7 @@ MAFFT
 EMBOSS  
 LASTZ  
 
-I tested Elloreas with the following versions, but it should work with others as well: Perl 5.28, R 3.5.1, minimap2 2.17, samtools 1.9, BLAST+ 2.9.0, USEARCH 11.0.667, MAFFT 7.402, EMBOSS 6.6.0, LASTZ 1.04. Paths to binaries of all these programs should be available through the environment variable $PATH.
+I tested Elloreas with the following versions, but it should work with others as well: Perl 5.28, R 3.5.1, samtools 1.9, BLAST+ 2.9.0, USEARCH 11.0.667, MAFFT 7.402, EMBOSS 6.6.0, LASTZ 1.04. Paths to binaries of all these programs should be available through the environment variable $PATH.
   
 ### Output of Elloreas
 The main files produced by Elloreas are:
